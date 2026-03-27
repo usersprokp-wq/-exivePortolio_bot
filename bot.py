@@ -62,8 +62,9 @@ async def button_handler(update: Update, context: CallbackContext):
     if query.data == 'ovdp':
         text = "📈 *ОВДП*\n\nОберіть дію:"
         keyboard = [
-            [InlineKeyboardButton("➕ Додати", callback_data='ovdp_add')],
-            [InlineKeyboardButton("📋 Список", callback_data='ovdp_list')],
+            [InlineKeyboardButton("➕ Додати запис", callback_data='ovdp_add')],
+            [InlineKeyboardButton("📋 Мої записи", callback_data='ovdp_list')],
+            [InlineKeyboardButton("📊 Статистика", callback_data='ovdp_stats')],
             [InlineKeyboardButton("🔙 Назад", callback_data='back_to_menu')]
         ]
         await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
@@ -127,8 +128,8 @@ async def button_handler(update: Update, context: CallbackContext):
         context.user_data['action'] = 'add'
         await query.edit_message_text("📈 *ОВДП - Додавання*\n\nВведіть назву облігації:", parse_mode='Markdown')
     
-    elif query.data == 'ovdp_list':
-        await query.edit_message_text("📈 *ОВДП - Список*\n\nТут буде список облігацій...\n\n(в розробці)", parse_mode='Markdown')
+    elif query.data == 'ovdp_stats':
+        await query.edit_message_text("📈 *ОВДП - Статистика*\n\nТут буде статистика...\n\n(в розробці)", parse_mode='Markdown')
 
 
 async def handle_message(update: Update, context: CallbackContext):
