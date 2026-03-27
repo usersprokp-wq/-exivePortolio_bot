@@ -319,21 +319,30 @@ async def handle_message(update: Update, context: CallbackContext):
             )
             session.add(bond)
             session.commit()
-            session.close()
             
-            # Очищаємо дані
-            context.user_data.clear()
+            # Зберігаємо дані перед закриттям сесії
+            bond_data = {
+                'date': bond.date,
+                'operation_type': bond.operation_type,
+                'bond_number': bond.bond_number,
+                'maturity_date': bond.maturity_date,
+                'price_per_unit': bond.price_per_unit,
+                'quantity': bond.quantity,
+                'total_amount': bond.total_amount,
+                'platform': bond.platform
+            }
+            session.close()
             
             await update.message.reply_text(
                 f"✅ *ОВДП додано!*\n\n"
-                f"📅 Дата: {bond.date}\n"
-                f"🔄 Тип: {bond.operation_type}\n"
-                f"🔢 Номер: {bond.bond_number}\n"
-                f"📆 Термін до: {bond.maturity_date}\n"
-                f"💰 Ціна: {bond.price_per_unit} грн\n"
-                f"📦 Кількість: {bond.quantity}\n"
-                f"💵 Сума: {bond.total_amount} грн\n"
-                f"🏦 Платформа: {bond.platform}",
+                f"📅 Дата: {bond_data['date']}\n"
+                f"🔄 Тип: {bond_data['operation_type']}\n"
+                f"🔢 Номер: {bond_data['bond_number']}\n"
+                f"📆 Термін до: {bond_data['maturity_date']}\n"
+                f"💰 Ціна: {bond_data['price_per_unit']} грн\n"
+                f"📦 Кількість: {bond_data['quantity']}\n"
+                f"💵 Сума: {bond_data['total_amount']} грн\n"
+                f"🏦 Платформа: {bond_data['platform']}",
                 parse_mode='Markdown'
             )
     
