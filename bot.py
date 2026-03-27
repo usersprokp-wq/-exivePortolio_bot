@@ -146,7 +146,7 @@ async def button_handler(update: Update, context: CallbackContext):
         keyboard = [
             [InlineKeyboardButton(f"{now.year} - {now.month}", callback_data='ignore')],
             [InlineKeyboardButton("◀️", callback_data='date_prev'), InlineKeyboardButton("Сьогодні", callback_data='date_today'), InlineKeyboardButton("▶️", callback_data='date_next')],
-            [InlineKeyboardButton("✅ Підтвердити", callback_data='date_confirm")]
+            [InlineKeyboardButton("✅ Підтвердити", callback_data='date_confirm')]
         ]
         await query.edit_message_text(
             "📅 *Виберіть дату операції*\n\nПоки що введіть вручну у форматі ДД.ММ.РРРР",
