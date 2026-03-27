@@ -77,6 +77,7 @@ async def button_handler(update: Update, context: CallbackContext):
         keyboard = [
             [InlineKeyboardButton("➕ Додати запис", callback_data='ovdp_add')],
             [InlineKeyboardButton("📋 Мої записи", callback_data='ovdp_list')],
+            [InlineKeyboardButton("💼 Портфель", callback_data='ovdp_portfolio')],
             [InlineKeyboardButton("📊 Статистика", callback_data='ovdp_stats')],
             [InlineKeyboardButton("🔙 Назад", callback_data='back_to_menu')]
         ]
