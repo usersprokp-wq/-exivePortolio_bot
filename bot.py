@@ -44,11 +44,13 @@ async def start(update: Update, context: CallbackContext):
         [InlineKeyboardButton("🔄 Синхронізація", callback_data='sync')]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text(
-        "📊 *Інвестиційний портфель*\n\nОберіть розділ для роботи:",
-        reply_markup=reply_markup,
-        parse_mode='Markdown'
-    )
+    text = "📊 *Інвестиційний портфель*\n\nОберіть розділ для роботи:"
+    
+    # Перевіряємо чи це callback (редагуємо) або нове повідомлення
+    if update.callback_query:
+        await update.callback_query.edit_message_text(text, reply_markup=reply_markup, parse_mode='Markdown')
+    else:
+        await update.message.reply_text(text, reply_markup=reply_markup, parse_mode='Markdown')
 
 async def button_handler(update: Update, context: CallbackContext):
     query = update.callback_query
