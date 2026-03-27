@@ -38,40 +38,40 @@ else:
 
 async def start(update: Update, context: CallbackContext):
     keyboard = [
-        [InlineKeyboardButton("➕ Додати товар", callback_data='add')],
-        [InlineKeyboardButton("📋 Список товарів", callback_data='list')]
+        [InlineKeyboardButton("📈 ОВДП", callback_data='ovdp')],
+        [InlineKeyboardButton("📊 Акції", callback_data='stocks')],
+        [InlineKeyboardButton("🏦 Депозит", callback_data='deposit')],
+        [InlineKeyboardButton("₿ Криптовалюта", callback_data='crypto')],
+        [InlineKeyboardButton("🪙 Нумізматика", callback_data='numismatics')],
+        [InlineKeyboardButton("📊 Аналіз портфеля", callback_data='analysis')],
+        [InlineKeyboardButton("🔄 Синхронізація", callback_data='sync')]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text("👋 Привіт! Оберіть дію:", reply_markup=reply_markup)
+    await update.message.reply_text(
+        "📊 *Інвестиційний портфель*\n\nОберіть розділ для роботи:",
+        reply_markup=reply_markup,
+        parse_mode='Markdown'
+    )
 
 async def button_handler(update: Update, context: CallbackContext):
     query = update.callback_query
     await query.answer()
     
-    if query.data == 'add':
-        context.user_data['adding'] = True
-        await query.edit_message_text("Введіть назву товару:")
-    elif query.data == 'list':
-        await show_products(query)
+    if query.data == 'ovdp':
+        await query.edit_message_text("📈 *ОВДП*\n\nТут будуть облігації...\n\n(в розробці)", parse_mode='Markdown')
+    elif query.data == 'stocks':
+        await query.edit_message_text("📊 *Акції*\n\nТут будуть акції...\n\n(в розробці)", parse_mode='Markdown')
+    elif query.data == 'deposit':
+        await query.edit_message_text("🏦 *Депозит*\n\nТут будуть депозити...\n\n(в розробці)", parse_mode='Markdown')
+    elif query.data == 'crypto':
+        await query.edit_message_text("₿ *Криптовалюта*\n\nТут буде крипта...\n\n(в розробці)", parse_mode='Markdown')
+    elif query.data == 'numismatics':
+        await query.edit_message_text("🪙 *Нумізматика*\n\nТут будуть монети...\n\n(в розробці)", parse_mode='Markdown')
+    elif query.data == 'analysis':
+        await query.edit_message_text("📊 *Аналіз портфеля*\n\nТут буде аналітика...\n\n(в розробці)", parse_mode='Markdown')
+    elif query.data == 'sync':
+        await query.edit_message_text("🔄 *Синхронізація*\n\nОберіть напрямок:\n\n1. БД → Excel\n2. Excel → БД\n\n(в розробці)", parse_mode='Markdown')
 
-async def show_products(query):
-    if not Session:
-        await query.edit_message_text("❌ Помилка підключення до бази даних")
-        return
-    
-    session = Session()
-    products = session.query(Product).all()
-    session.close()
-    
-    if not products:
-        await query.edit_message_text("📭 Список товарів порожній")
-        return
-    
-    text = "📋 Список товарів:\n\n"
-    for i, p in enumerate(products, 1):
-        text += f"{i}. {p.name} - {p.price} грн (в наявності: {p.quantity})\n"
-    
-    await query.edit_message_text(text)
 
 async def handle_message(update: Update, context: CallbackContext):
     if context.user_data.get('adding'):
