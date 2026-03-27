@@ -137,13 +137,47 @@ async def button_handler(update: Update, context: CallbackContext):
         
     elif query.data == 'back_to_menu':
         await start(update, context)
-    elif query.data == 'ovdp_add':
+        elif query.data == 'ovdp_add':
         context.user_data['adding_bond'] = True
         context.user_data['bond_step'] = 'date'
-        await query.edit_message_text("📈 *Додавання ОВДП*\n\nВведіть дату операції (у форматі ДД.ММ.РРРР):", parse_mode='Markdown')    
+        
+        # Створюємо календар на поточний місяць
+        now = datetime.now()
+        keyboard = [
+            [InlineKeyboardButton(f"{now.year} - {now.month}", callback_data='ignore')],
+            [InlineKeyboardButton("◀️", callback_data='date_prev'), InlineKeyboardButton("Сьогодні", callback_data='date_today'), InlineKeyboardButton("▶️", callback_data='date_next')],
+            [InlineKeyboardButton("✅ Підтвердити", callback_data='date_confirm")]
+        ]
+        await query.edit_message_text(
+            "📅 *Виберіть дату операції*\n\nПоки що введіть вручну у форматі ДД.ММ.РРРР",
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode='Markdown'
+        )    
     elif query.data == 'ovdp_stats':
         await query.edit_message_text("📈 *ОВДП - Статистика*\n\nТут буде статистика...\n\n(в розробці)", parse_mode='Markdown')
-
+    
+    elif query.data == 'bond_buy':
+        context.user_data['bond_operation_type'] = 'купівля'
+        context.user_data['bond_step'] = 'bond_number'
+        await query.edit_message_text("📈 Введіть номер ОВДП:", parse_mode='Markdown')
+        
+    elif query.data == 'bond_sell':
+        context.user_data['bond_operation_type'] = 'продаж'
+        context.user_data['bond_step'] = 'bond_number'
+        await query.edit_message_text("📈 Введіть номер ОВДП:", parse_mode='Markdown')
+        
+    elif query.data == 'bond_confirm_amount':
+        # Підтверджуємо автоматичну суму
+        quantity = context.user_data.get('bond_quantity', 0)
+        price = context.user_data.get('bond_price_per_unit', 0)
+        total = quantity * price
+        context.user_data['bond_total_amount'] = total
+        context.user_data['bond_step'] = 'platform'
+        await query.edit_message_text(f"📈 Сума: {total} грн (автоматично)\n\nВведіть платформу:", parse_mode='Markdown')
+        
+    elif query.data == 'bond_edit_amount':
+        context.user_data['bond_step'] = 'total_amount_manual'
+        await query.edit_message_text("📈 Введіть суму вручну:", parse_mode='Markdown')
 
 async def handle_message(update: Update, context: CallbackContext):
     # Додавання ОВДП
@@ -156,9 +190,16 @@ async def handle_message(update: Update, context: CallbackContext):
             await update.message.reply_text("📈 Введіть тип операції (купівля/продаж):")
             
         elif step == 'operation_type':
-            context.user_data['bond_operation_type'] = update.message.text
-            context.user_data['bond_step'] = 'bond_number'
-            await update.message.reply_text("📈 Введіть номер ОВДП:")
+            # Пропонуємо вибір типу операції через кнопки
+            keyboard = [
+                [InlineKeyboardButton("🟢 Купівля", callback_data='bond_buy')],
+                [InlineKeyboardButton("🔴 Продаж", callback_data='bond_sell')]
+            ]
+            await update.message.reply_text(
+                "📈 Виберіть тип операції:",
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+            return  # Виходимо, бо чекаємо на callback
             
         elif step == 'bond_number':
             context.user_data['bond_number'] = update.message.text
@@ -180,9 +221,20 @@ async def handle_message(update: Update, context: CallbackContext):
                 
         elif step == 'quantity':
             try:
-                context.user_data['bond_quantity'] = int(update.message.text)
-                context.user_data['bond_step'] = 'total_amount'
-                await update.message.reply_text("📈 Введіть суму:")
+                quantity = int(update.message.text)
+                context.user_data['bond_quantity'] = quantity
+                price = context.user_data.get('bond_price_per_unit', 0)
+                total = quantity * price
+                
+                keyboard = [
+                    [InlineKeyboardButton(f"✅ Прийняти {total} грн", callback_data='bond_confirm_amount')],
+                    [InlineKeyboardButton("✏️ Ввести свою суму", callback_data='bond_edit_amount')]
+                ]
+                await update.message.reply_text(
+                    f"📈 Розрахована сума: {total} грн\n\nОберіть дію:",
+                    reply_markup=InlineKeyboardMarkup(keyboard)
+                )
+                context.user_data['bond_step'] = 'confirm_amount'
             except:
                 await update.message.reply_text("❌ Введіть ціле число:")
                 
@@ -194,6 +246,14 @@ async def handle_message(update: Update, context: CallbackContext):
             except:
                 await update.message.reply_text("❌ Введіть число:")
                 
+        elif step == 'total_amount_manual':
+            try:
+                context.user_data['bond_total_amount'] = float(update.message.text)
+                context.user_data['bond_step'] = 'platform'
+                await update.message.reply_text("📈 Введіть платформу:")
+            except:
+                await update.message.reply_text("❌ Введіть число:")            
+
         elif step == 'platform':
             context.user_data['bond_platform'] = update.message.text
             
