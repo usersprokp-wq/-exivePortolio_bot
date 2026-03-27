@@ -7,7 +7,8 @@ logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s
 logger = logging.getLogger(__name__)
 
 # Тимчасовий токен - заміниш пізніше
-BOT_TOKEN = "YOUR_BOT_TOKEN_HERE"
+import os
+BOT_TOKEN = os.getenv('BOT_TOKEN')
 
 async def start(update: Update, context: CallbackContext):
     keyboard = [
