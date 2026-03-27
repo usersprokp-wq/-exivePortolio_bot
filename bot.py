@@ -135,24 +135,53 @@ async def button_handler(update: Update, context: CallbackContext):
         ]
         await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
         
+
+
+    elif query.data.startswith('date_'):
+        date_value = query.data.replace('date_', '')
+        if date_value != 'manual':
+            context.user_data['bond_date'] = date_value
+            context.user_data['bond_step'] = 'operation_type'
+            keyboard = [
+                [InlineKeyboardButton("🟢 Купівля", callback_data='bond_buy')],
+                [InlineKeyboardButton("🔴 Продаж", callback_data='bond_sell')]
+            ]
+            await query.edit_message_text(
+                f"📅 Дата: {date_value}\n\n📈 Виберіть тип операції:",
+                reply_markup=InlineKeyboardMarkup(keyboard),
+                parse_mode='Markdown'
+            )
+        else:
+            context.user_data['bond_step'] = 'date_manual'
+            await query.edit_message_text("📅 Введіть дату вручну (у форматі ДД.ММ.РРРР):", parse_mode='Markdown')
+
     elif query.data == 'back_to_menu':
         await start(update, context)
     elif query.data == 'ovdp_add':
         context.user_data['adding_bond'] = True
         context.user_data['bond_step'] = 'date'
         
-        # Створюємо календар на поточний місяць
-        now = datetime.now()
+        # Імпортуємо datetime для роботи з датами
+        from datetime import datetime, timedelta
+        
+        today = datetime.now()
+        tomorrow = today + timedelta(days=1)
+        three_days = today + timedelta(days=3)
+        week = today + timedelta(days=7)
+        
         keyboard = [
-            [InlineKeyboardButton(f"{now.year} - {now.month}", callback_data='ignore')],
-            [InlineKeyboardButton("◀️", callback_data='date_prev'), InlineKeyboardButton("Сьогодні", callback_data='date_today'), InlineKeyboardButton("▶️", callback_data='date_next')],
-            [InlineKeyboardButton("✅ Підтвердити", callback_data='date_confirm')]
+            [InlineKeyboardButton(f"📅 Сьогодні ({today.strftime('%d.%m.%Y')})", callback_data=f'date_{today.strftime("%d.%m.%Y")}')],
+            [InlineKeyboardButton(f"📅 Завтра ({tomorrow.strftime('%d.%m.%Y')})", callback_data=f'date_{tomorrow.strftime("%d.%m.%Y")}')],
+            [InlineKeyboardButton(f"📅 Через 3 дні ({three_days.strftime('%d.%m.%Y')})", callback_data=f'date_{three_days.strftime("%d.%m.%Y")}')],
+            [InlineKeyboardButton(f"📅 Через тиждень ({week.strftime('%d.%m.%Y')})", callback_data=f'date_{week.strftime("%d.%m.%Y")}')],
+            [InlineKeyboardButton("✏️ Ввести вручну", callback_data='date_manual')]
         ]
         await query.edit_message_text(
-            "📅 *Виберіть дату операції*\n\nПоки що введіть вручну у форматі ДД.ММ.РРРР",
+            "📅 *Виберіть дату операції:*",
             reply_markup=InlineKeyboardMarkup(keyboard),
             parse_mode='Markdown'
-        )    
+        )
+
     elif query.data == 'ovdp_stats':
         await query.edit_message_text("📈 *ОВДП - Статистика*\n\nТут буде статистика...\n\n(в розробці)", parse_mode='Markdown')
     
@@ -184,10 +213,29 @@ async def handle_message(update: Update, context: CallbackContext):
     if context.user_data.get('adding_bond'):
         step = context.user_data.get('bond_step')
         
+        if step == 'date_manual':
+            context.user_data['bond_date'] = update.message.text
+            context.user_data['bond_step'] = 'operation_type'
+            keyboard = [
+                [InlineKeyboardButton("🟢 Купівля", callback_data='bond_buy')],
+                [InlineKeyboardButton("🔴 Продаж", callback_data='bond_sell')]
+            ]
+            await update.message.reply_text(
+                f"📅 Дата: {update.message.text}\n\n📈 Виберіть тип операції:",
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+
         if step == 'date':
             context.user_data['bond_date'] = update.message.text
             context.user_data['bond_step'] = 'operation_type'
-            await update.message.reply_text("📈 Введіть тип операції (купівля/продаж):")
+            keyboard = [
+                [InlineKeyboardButton("🟢 Купівля", callback_data='bond_buy')],
+                [InlineKeyboardButton("🔴 Продаж", callback_data='bond_sell')]
+            ]
+            await update.message.reply_text(
+                "📈 Виберіть тип операції:",
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
             
         elif step == 'operation_type':
             # Пропонуємо вибір типу операції через кнопки
