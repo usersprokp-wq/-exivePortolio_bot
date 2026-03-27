@@ -137,7 +137,7 @@ async def button_handler(update: Update, context: CallbackContext):
         
     elif query.data == 'back_to_menu':
         await start(update, context)
-        elif query.data == 'ovdp_add':
+    elif query.data == 'ovdp_add':
         context.user_data['adding_bond'] = True
         context.user_data['bond_step'] = 'date'
         
