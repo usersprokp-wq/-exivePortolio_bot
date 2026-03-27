@@ -38,12 +38,9 @@ else:
 
 async def start(update: Update, context: CallbackContext):
     keyboard = [
-        [InlineKeyboardButton("📈 ОВДП", callback_data='ovdp')],
-        [InlineKeyboardButton("📊 Акції", callback_data='stocks')],
-        [InlineKeyboardButton("🏦 Депозит", callback_data='deposit')],
-        [InlineKeyboardButton("₿ Криптовалюта", callback_data='crypto')],
-        [InlineKeyboardButton("🪙 Нумізматика", callback_data='numismatics')],
-        [InlineKeyboardButton("📊 Аналіз портфеля", callback_data='analysis')],
+        [InlineKeyboardButton("📈 ОВДП", callback_data='ovdp'), InlineKeyboardButton("📊 Акції", callback_data='stocks')],
+        [InlineKeyboardButton("🏦 Депозит", callback_data='deposit'), InlineKeyboardButton("₿ Криптовалюта", callback_data='crypto')],
+        [InlineKeyboardButton("🪙 Нумізматика", callback_data='numismatics'), InlineKeyboardButton("📊 Аналіз портфеля", callback_data='analysis')],
         [InlineKeyboardButton("🔄 Синхронізація", callback_data='sync')]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
