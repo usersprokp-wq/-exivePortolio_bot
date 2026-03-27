@@ -122,6 +122,14 @@ async def button_handler(update: Update, context: CallbackContext):
         
     elif query.data == 'back_to_menu':
         await start(update, context)
+    elif query.data == 'ovdp_add':
+        context.user_data['section'] = 'ovdp'
+        context.user_data['action'] = 'add'
+        await query.edit_message_text("📈 *ОВДП - Додавання*\n\nВведіть назву облігації:", parse_mode='Markdown')
+    
+    elif query.data == 'ovdp_list':
+        await query.edit_message_text("📈 *ОВДП - Список*\n\nТут буде список облігацій...\n\n(в розробці)", parse_mode='Markdown')
+
 
 async def handle_message(update: Update, context: CallbackContext):
     if context.user_data.get('adding'):
