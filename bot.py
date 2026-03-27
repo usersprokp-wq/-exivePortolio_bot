@@ -27,6 +27,19 @@ class Product(Base):
     quantity = Column(Integer)
     created_at = Column(String(50), default=datetime.now().isoformat())
 
+class Bond(Base):
+    __tablename__ = 'bonds'
+    id = Column(Integer, primary_key=True)
+    date = Column(String(50))
+    operation_type = Column(String(20))
+    bond_number = Column(String(50))
+    maturity_date = Column(String(50))
+    price_per_unit = Column(Float)
+    quantity = Column(Integer)
+    total_amount = Column(Float)
+    platform = Column(String(100))
+    created_at = Column(String(50), default=datetime.now().isoformat())
+
 if DATABASE_URL:
     engine = create_engine(DATABASE_URL)
     Base.metadata.create_all(engine)
@@ -124,16 +137,99 @@ async def button_handler(update: Update, context: CallbackContext):
     elif query.data == 'back_to_menu':
         await start(update, context)
     elif query.data == 'ovdp_add':
-        context.user_data['section'] = 'ovdp'
-        context.user_data['action'] = 'add'
-        await query.edit_message_text("📈 *ОВДП - Додавання*\n\nВведіть назву облігації:", parse_mode='Markdown')
-    
+        context.user_data['adding_bond'] = True
+        context.user_data['bond_step'] = 'date'
+        await query.edit_message_text("📈 *Додавання ОВДП*\n\nВведіть дату операції (у форматі ДД.ММ.РРРР):", parse_mode='Markdown')    
     elif query.data == 'ovdp_stats':
         await query.edit_message_text("📈 *ОВДП - Статистика*\n\nТут буде статистика...\n\n(в розробці)", parse_mode='Markdown')
 
 
 async def handle_message(update: Update, context: CallbackContext):
-    if context.user_data.get('adding'):
+    # Додавання ОВДП
+    if context.user_data.get('adding_bond'):
+        step = context.user_data.get('bond_step')
+        
+        if step == 'date':
+            context.user_data['bond_date'] = update.message.text
+            context.user_data['bond_step'] = 'operation_type'
+            await update.message.reply_text("📈 Введіть тип операції (купівля/продаж):")
+            
+        elif step == 'operation_type':
+            context.user_data['bond_operation_type'] = update.message.text
+            context.user_data['bond_step'] = 'bond_number'
+            await update.message.reply_text("📈 Введіть номер ОВДП:")
+            
+        elif step == 'bond_number':
+            context.user_data['bond_number'] = update.message.text
+            context.user_data['bond_step'] = 'maturity_date'
+            await update.message.reply_text("📈 Введіть термін до (дату погашення ДД.ММ.РРРР):")
+            
+        elif step == 'maturity_date':
+            context.user_data['bond_maturity_date'] = update.message.text
+            context.user_data['bond_step'] = 'price_per_unit'
+            await update.message.reply_text("📈 Введіть ціну за шт:")
+            
+        elif step == 'price_per_unit':
+            try:
+                context.user_data['bond_price_per_unit'] = float(update.message.text)
+                context.user_data['bond_step'] = 'quantity'
+                await update.message.reply_text("📈 Введіть кількість:")
+            except:
+                await update.message.reply_text("❌ Введіть число:")
+                
+        elif step == 'quantity':
+            try:
+                context.user_data['bond_quantity'] = int(update.message.text)
+                context.user_data['bond_step'] = 'total_amount'
+                await update.message.reply_text("📈 Введіть суму:")
+            except:
+                await update.message.reply_text("❌ Введіть ціле число:")
+                
+        elif step == 'total_amount':
+            try:
+                context.user_data['bond_total_amount'] = float(update.message.text)
+                context.user_data['bond_step'] = 'platform'
+                await update.message.reply_text("📈 Введіть платформу (наприклад: ПриватБанк, Тіндер):")
+            except:
+                await update.message.reply_text("❌ Введіть число:")
+                
+        elif step == 'platform':
+            context.user_data['bond_platform'] = update.message.text
+            
+            # Зберігаємо в базу даних
+            session = Session()
+            bond = Bond(
+                date=context.user_data['bond_date'],
+                operation_type=context.user_data['bond_operation_type'],
+                bond_number=context.user_data['bond_number'],
+                maturity_date=context.user_data['bond_maturity_date'],
+                price_per_unit=context.user_data['bond_price_per_unit'],
+                quantity=context.user_data['bond_quantity'],
+                total_amount=context.user_data['bond_total_amount'],
+                platform=context.user_data['bond_platform']
+            )
+            session.add(bond)
+            session.commit()
+            session.close()
+            
+            # Очищаємо дані
+            context.user_data.clear()
+            
+            await update.message.reply_text(
+                f"✅ *ОВДП додано!*\n\n"
+                f"📅 Дата: {bond.date}\n"
+                f"🔄 Тип: {bond.operation_type}\n"
+                f"🔢 Номер: {bond.bond_number}\n"
+                f"📆 Термін до: {bond.maturity_date}\n"
+                f"💰 Ціна: {bond.price_per_unit} грн\n"
+                f"📦 Кількість: {bond.quantity}\n"
+                f"💵 Сума: {bond.total_amount} грн\n"
+                f"🏦 Платформа: {bond.platform}",
+                parse_mode='Markdown'
+            )
+    
+    # Старий код для товарів (можна видалити пізніше)
+    elif context.user_data.get('adding'):
         context.user_data['name'] = update.message.text
         context.user_data['awaiting_price'] = True
         await update.message.reply_text("💰 Введіть ціну:")
@@ -149,7 +245,6 @@ async def handle_message(update: Update, context: CallbackContext):
         try:
             quantity = int(update.message.text)
             
-            # Зберігаємо в базу даних
             session = Session()
             product = Product(
                 name=context.user_data['name'],
