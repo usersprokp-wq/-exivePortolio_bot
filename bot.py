@@ -54,21 +54,72 @@ async def button_handler(update: Update, context: CallbackContext):
     query = update.callback_query
     await query.answer()
     
+    # Зберігаємо поточне повідомлення
+    context.user_data['current_message_id'] = query.message.message_id
+    
     if query.data == 'ovdp':
-        await query.edit_message_text("📈 *ОВДП*\n\nТут будуть облігації...\n\n(в розробці)", parse_mode='Markdown')
+        text = "📈 *ОВДП*\n\nОберіть дію:"
+        keyboard = [
+            [InlineKeyboardButton("➕ Додати", callback_data='ovdp_add')],
+            [InlineKeyboardButton("📋 Список", callback_data='ovdp_list')],
+            [InlineKeyboardButton("🔙 Назад", callback_data='back_to_menu')]
+        ]
+        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+        
     elif query.data == 'stocks':
-        await query.edit_message_text("📊 *Акції*\n\nТут будуть акції...\n\n(в розробці)", parse_mode='Markdown')
+        text = "📊 *Акції*\n\nОберіть дію:"
+        keyboard = [
+            [InlineKeyboardButton("➕ Додати", callback_data='stocks_add')],
+            [InlineKeyboardButton("📋 Список", callback_data='stocks_list')],
+            [InlineKeyboardButton("🔙 Назад", callback_data='back_to_menu')]
+        ]
+        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+        
     elif query.data == 'deposit':
-        await query.edit_message_text("🏦 *Депозит*\n\nТут будуть депозити...\n\n(в розробці)", parse_mode='Markdown')
+        text = "🏦 *Депозит*\n\nОберіть дію:"
+        keyboard = [
+            [InlineKeyboardButton("➕ Додати", callback_data='deposit_add')],
+            [InlineKeyboardButton("📋 Список", callback_data='deposit_list')],
+            [InlineKeyboardButton("🔙 Назад", callback_data='back_to_menu')]
+        ]
+        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+        
     elif query.data == 'crypto':
-        await query.edit_message_text("₿ *Криптовалюта*\n\nТут буде крипта...\n\n(в розробці)", parse_mode='Markdown')
+        text = "₿ *Криптовалюта*\n\nОберіть дію:"
+        keyboard = [
+            [InlineKeyboardButton("➕ Додати", callback_data='crypto_add')],
+            [InlineKeyboardButton("📋 Список", callback_data='crypto_list')],
+            [InlineKeyboardButton("🔙 Назад", callback_data='back_to_menu')]
+        ]
+        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+        
     elif query.data == 'numismatics':
-        await query.edit_message_text("🪙 *Нумізматика*\n\nТут будуть монети...\n\n(в розробці)", parse_mode='Markdown')
+        text = "🪙 *Нумізматика*\n\nОберіть дію:"
+        keyboard = [
+            [InlineKeyboardButton("➕ Додати", callback_data='numismatics_add')],
+            [InlineKeyboardButton("📋 Список", callback_data='numismatics_list')],
+            [InlineKeyboardButton("🔙 Назад", callback_data='back_to_menu')]
+        ]
+        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+        
     elif query.data == 'analysis':
-        await query.edit_message_text("📊 *Аналіз портфеля*\n\nТут буде аналітика...\n\n(в розробці)", parse_mode='Markdown')
+        text = "📊 *Аналіз портфеля*\n\nТут буде аналітика...\n\n(в розробці)"
+        keyboard = [
+            [InlineKeyboardButton("🔙 Назад", callback_data='back_to_menu')]
+        ]
+        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+        
     elif query.data == 'sync':
-        await query.edit_message_text("🔄 *Синхронізація*\n\nОберіть напрямок:\n\n1. БД → Excel\n2. Excel → БД\n\n(в розробці)", parse_mode='Markdown')
-
+        text = "🔄 *Синхронізація*\n\nОберіть напрямок:"
+        keyboard = [
+            [InlineKeyboardButton("📤 БД → Excel", callback_data='sync_db_to_sheets')],
+            [InlineKeyboardButton("📥 Excel → БД", callback_data='sync_sheets_to_db')],
+            [InlineKeyboardButton("🔙 Назад", callback_data='back_to_menu')]
+        ]
+        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+        
+    elif query.data == 'back_to_menu':
+        await start(update, context)
 
 async def handle_message(update: Update, context: CallbackContext):
     if context.user_data.get('adding'):
