@@ -552,24 +552,47 @@ async def show_bonds_portfolio(update: Update, context: CallbackContext, platfor
         all_bonds = session.query(Bond).all()
         session.close()
         
-        portfolio = {}
-        for bond in all_bonds:
-            if bond.bond_number not in portfolio:
-                portfolio[bond.bond_number] = {
-                    'maturity_date': bond.maturity_date,
-                    'total_quantity': 0,
-                    'total_amount': 0,
-                    'platform': bond.platform
-                }
-            
-            if bond.operation_type == 'купівля':
-                portfolio[bond.bond_number]['total_quantity'] += bond.quantity
-                portfolio[bond.bond_number]['total_amount'] += bond.total_amount
-            else:
-                portfolio[bond.bond_number]['total_quantity'] -= bond.quantity
-                portfolio[bond.bond_number]['total_amount'] -= bond.total_amount
+        # FIFO метод розрахунку портфеля з лотами
+        from collections import defaultdict
+        portfolio_lots = defaultdict(list)  # bond_number -> список лотів (quantity, price, total)
         
-        portfolio = {k: v for k, v in portfolio.items() if v['total_quantity'] > 0}
+        # Сортуємо по row_order для правильного FIFO
+        sorted_bonds = sorted(all_bonds, key=lambda x: x.row_order if x.row_order and x.row_order > 0 else float('inf'))
+        
+        for bond in sorted_bonds:
+            if bond.operation_type == 'купівля':
+                portfolio_lots[bond.bond_number].append({
+                    'quantity': bond.quantity,
+                    'price': bond.price_per_unit,
+                    'total': bond.total_amount,
+                    'maturity_date': bond.maturity_date,
+                    'platform': bond.platform
+                })
+            else:  # продаж
+                remaining = bond.quantity
+                while remaining > 0 and portfolio_lots[bond.bond_number]:
+                    lot = portfolio_lots[bond.bond_number][0]
+                    if lot['quantity'] <= remaining:
+                        remaining -= lot['quantity']
+                        portfolio_lots[bond.bond_number].pop(0)
+                    else:
+                        lot['quantity'] -= remaining
+                        lot['total'] -= (remaining * lot['price'])
+                        remaining = 0
+        
+        # Конвертуємо лоти в портфель
+        portfolio = {}
+        for bond_num, lots in portfolio_lots.items():
+            if lots:  # Якщо є залишки
+                total_qty = sum(lot['quantity'] for lot in lots)
+                total_amount = sum(lot['total'] for lot in lots)
+                portfolio[bond_num] = {
+                    'maturity_date': lots[0]['maturity_date'],
+                    'total_quantity': total_qty,
+                    'total_amount': total_amount,
+                    'platform': lots[0]['platform'],
+                    'lots': lots
+                }
         
         if platform:
             platform_name = platform.upper()
