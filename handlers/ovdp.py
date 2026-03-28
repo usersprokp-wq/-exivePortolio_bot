@@ -617,11 +617,15 @@ async def show_profit_menu(update: Update, context: CallbackContext):
             else:
                 total_sell += bond.total_amount
         
+        logger.info(f"DEBUG: total_buy={total_buy}, total_sell={total_sell}")
+        
         # Якщо нема продажів - прибуток = 0
         if total_sell == 0:
             realized_profit = 0
         else:
             realized_profit = total_sell - total_buy
+        
+        logger.info(f"DEBUG: realized_profit={realized_profit}")
         
         # Отримуємо списаний прибуток
         session = Session()
