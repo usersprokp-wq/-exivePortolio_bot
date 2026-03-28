@@ -212,13 +212,19 @@ async def button_handler(update: Update, context: CallbackContext):
         await query.edit_message_text("📈 Введіть номер ОВДП:", parse_mode='Markdown')
         
     elif query.data == 'bond_confirm_amount':
-        # Підтверджуємо автоматичну суму
         quantity = context.user_data.get('bond_quantity', 0)
         price = context.user_data.get('bond_price_per_unit', 0)
         total = quantity * price
         context.user_data['bond_total_amount'] = total
         context.user_data['bond_step'] = 'platform'
-        await query.edit_message_text(f"📈 Сума: {total} грн (автоматично)\n\nВведіть платформу:", parse_mode='Markdown')
+        keyboard = [
+            [InlineKeyboardButton("🏦 ICU", callback_data='platform_icu')],
+            [InlineKeyboardButton("🏦 SENSBANK", callback_data='platform_sensbank')]
+        ]
+        await query.edit_message_text(
+            f"📈 Сума: {total} грн\n\nВиберіть платформу:",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
         
     elif query.data == 'bond_edit_amount':
         context.user_data['bond_step'] = 'total_amount_manual'
