@@ -137,15 +137,15 @@ def calculate_profit_by_price(bonds):
     Розраховує прибуток по методу FIFO (First In First Out).
     
     Логіка:
-    1. Для кожної облігації ведемо стек купівель з ціною
+    1. Для кожної облігації ведемо чергу купівель з ціною
     2. При продажі - спочатку продаємо найстарішу купівлю
-    3. Прибуток = (price_sell - price_buy) * quantity_sell
-    4. Загальний прибуток = сума всіх прибутків від продажів
+    3. Якщо однієї купівлі недостатньо - беремо з наступної
+    4. Прибуток = (price_sell - price_buy) * quantity_sell
     """
-    from collections import defaultdict
+    from collections import defaultdict, deque
     
     bond_stats = defaultdict(lambda: {
-        'buy_stack': [],  # Стек купівель [(price, quantity, date), ...]
+        'buy_queue': deque(),  # Черга купівель [(price, quantity), ...]
         'sales': [],
         'profit': 0
     })
@@ -157,41 +157,51 @@ def calculate_profit_by_price(bonds):
         bond_num = bond.bond_number
         
         if bond.operation_type == 'купівля':
-            # Додаємо купівлю в стек
-            bond_stats[bond_num]['buy_stack'].append({
+            # Додаємо купівлю в чергу
+            bond_stats[bond_num]['buy_queue'].append({
                 'price': bond.price_per_unit,
                 'quantity': bond.quantity,
                 'date': bond.date
             })
         
         elif bond.operation_type == 'продаж':
-            # Продаємо з стека FIFO
+            # Продаємо з черги FIFO
             remaining_quantity = bond.quantity
             sale_profit = 0
+            sale_details = []
             
-            while remaining_quantity > 0 and bond_stats[bond_num]['buy_stack']:
-                buy = bond_stats[bond_num]['buy_stack'][0]
+            while remaining_quantity > 0 and bond_stats[bond_num]['buy_queue']:
+                buy = bond_stats[bond_num]['buy_queue'][0]
                 
                 # Скільки можемо продати з цієї купівлі
                 qty_to_sell = min(remaining_quantity, buy['quantity'])
                 
-                # Розраховуємо прибуток
+                # Розраховуємо прибуток для цієї партії
                 profit_per_unit = bond.price_per_unit - buy['price']
-                sale_profit += profit_per_unit * qty_to_sell
+                partition_profit = profit_per_unit * qty_to_sell
+                sale_profit += partition_profit
                 
-                # Оновлюємо кількість в стеці
+                sale_details.append({
+                    'buy_date': buy['date'],
+                    'buy_price': buy['price'],
+                    'quantity': qty_to_sell,
+                    'partition_profit': partition_profit
+                })
+                
+                # Оновлюємо кількість в черзі
                 buy['quantity'] -= qty_to_sell
                 remaining_quantity -= qty_to_sell
                 
-                # Якщо купівля повністю продана - видаляємо зі стека
+                # Якщо купівля повністю продана - видаляємо з черги
                 if buy['quantity'] == 0:
-                    bond_stats[bond_num]['buy_stack'].pop(0)
+                    bond_stats[bond_num]['buy_queue'].popleft()
             
             bond_stats[bond_num]['sales'].append({
+                'sell_date': bond.date,
                 'quantity': bond.quantity,
-                'price_per_unit': bond.price_per_unit,
+                'sell_price': bond.price_per_unit,
                 'profit': sale_profit,
-                'date': bond.date
+                'details': sale_details
             })
             
             bond_stats[bond_num]['profit'] += sale_profit
