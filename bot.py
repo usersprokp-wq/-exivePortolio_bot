@@ -570,7 +570,7 @@ async def show_bonds_list(update: Update, context: CallbackContext):
             await query.edit_message_text("📭 У вас ще немає записів ОВДП")
             return
         
-            text = "📋 *Останні 20 записів ОВДП:*\n\n"
+        text = "📋 *Останні 20 записів ОВДП:*\n\n"
         for i, bond in enumerate(bonds, 1):
             text += f"{i}. 📅 {bond.date} | {bond.operation_type} | 🏦 {bond.platform}\n"
             text += f"   🔢 {bond.bond_number} грн | {bond.quantity} шт | {bond.total_amount} грн\n\n"
