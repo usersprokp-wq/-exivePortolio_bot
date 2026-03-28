@@ -134,61 +134,72 @@ def calculate_monthly_profit(bonds):
 
 def calculate_profit_by_price(bonds):
     """
-    Розраховує прибуток по кожному bond_number окремо.
+    Розраховує прибуток по методу FIFO (First In First Out).
     
     Логіка:
-    1. Знаходимо середню ціну купівлі для кожного номера
-    2. Для кожної продажі: прибуток = (price_sell - avg_price_buy) * quantity_sell
-    3. Загальний прибуток = сума всіх прибутків від продажів
+    1. Для кожної облігації ведемо стек купівель з ціною
+    2. При продажі - спочатку продаємо найстарішу купівлю
+    3. Прибуток = (price_sell - price_buy) * quantity_sell
+    4. Загальний прибуток = сума всіх прибутків від продажів
     """
-    bond_stats = {}
+    from collections import defaultdict
     
-    # Спочатку збираємо всі купівлі по bond_number
-    for bond in bonds:
+    bond_stats = defaultdict(lambda: {
+        'buy_stack': [],  # Стек купівель [(price, quantity, date), ...]
+        'sales': [],
+        'profit': 0
+    })
+    
+    # Сортуємо по даті для правильного FIFO
+    sorted_bonds = sorted(bonds, key=lambda x: x.date)
+    
+    for bond in sorted_bonds:
         bond_num = bond.bond_number
         
-        if bond_num not in bond_stats:
-            bond_stats[bond_num] = {
-                'buy_total_amount': 0,
-                'buy_total_quantity': 0,
-                'avg_price_buy': 0,
-                'sales': [],
-                'profit': 0
-            }
-        
         if bond.operation_type == 'купівля':
-            bond_stats[bond_num]['buy_total_amount'] += bond.total_amount
-            bond_stats[bond_num]['buy_total_quantity'] += bond.quantity
-    
-    # Розраховуємо середню ціну купівлі для кожного номера
-    for bond_num, stats in bond_stats.items():
-        if stats['buy_total_quantity'] > 0:
-            stats['avg_price_buy'] = stats['buy_total_amount'] / stats['buy_total_quantity']
-    
-    # Обробляємо продажі
-    for bond in bonds:
-        if bond.operation_type == 'продаж':
-            bond_num = bond.bond_number
-            avg_price = bond_stats[bond_num]['avg_price_buy']
+            # Додаємо купівлю в стек
+            bond_stats[bond_num]['buy_stack'].append({
+                'price': bond.price_per_unit,
+                'quantity': bond.quantity,
+                'date': bond.date
+            })
+        
+        elif bond.operation_type == 'продаж':
+            # Продаємо з стека FIFO
+            remaining_quantity = bond.quantity
+            sale_profit = 0
             
-            # Прибуток на одну облігацію
-            profit_per_unit = bond.price_per_unit - avg_price
-            
-            # Загальний прибуток від цієї продажі
-            total_profit = profit_per_unit * bond.quantity
+            while remaining_quantity > 0 and bond_stats[bond_num]['buy_stack']:
+                buy = bond_stats[bond_num]['buy_stack'][0]
+                
+                # Скільки можемо продати з цієї купівлі
+                qty_to_sell = min(remaining_quantity, buy['quantity'])
+                
+                # Розраховуємо прибуток
+                profit_per_unit = bond.price_per_unit - buy['price']
+                sale_profit += profit_per_unit * qty_to_sell
+                
+                # Оновлюємо кількість в стеці
+                buy['quantity'] -= qty_to_sell
+                remaining_quantity -= qty_to_sell
+                
+                # Якщо купівля повністю продана - видаляємо зі стека
+                if buy['quantity'] == 0:
+                    bond_stats[bond_num]['buy_stack'].pop(0)
             
             bond_stats[bond_num]['sales'].append({
                 'quantity': bond.quantity,
                 'price_per_unit': bond.price_per_unit,
-                'profit': total_profit
+                'profit': sale_profit,
+                'date': bond.date
             })
             
-            bond_stats[bond_num]['profit'] += total_profit
+            bond_stats[bond_num]['profit'] += sale_profit
     
     # Розраховуємо загальний прибуток
     total_profit = sum(stats['profit'] for stats in bond_stats.values())
     
-    return bond_stats, total_profit
+    return dict(bond_stats), total_profit
 
 
 async def button_handler_ovdp(update: Update, context: CallbackContext):
