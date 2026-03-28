@@ -25,82 +25,51 @@ except ImportError:
 def fetch_bond_price_icu(bond_number):
     """
     Парсить ціну облігації з uainvest.com.ua для ICU
-    Спрощена версія за робочим прикладом
+    Використовує робочий парсер
     """
     try:
         import requests
         from bs4 import BeautifulSoup
         
         isin = f"UA{bond_number}"
+        
         url = "https://uainvest.com.ua/ukrbonds"
-        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
-        
-        logger.info(f"Fetching price for ISIN {isin}")
-        
+        headers = {"User-Agent": "Mozilla/5.0"}
+
         response = requests.get(url, headers=headers, timeout=15)
         soup = BeautifulSoup(response.text, 'html.parser')
-        
+
         table = soup.find('table')
-        if not table:
-            logger.warning("Table not found")
-            return None
-        
         rows = table.find_all('tr')
-        if len(rows) < 2:
-            logger.warning("No data rows in table")
-            return None
-        
-        # Знаходимо індекси колонок з заголовків
+
         headers_row = rows[0].find_all('th')
         isin_col = broker_col = price_col = None
-        
+
         for i, th in enumerate(headers_row):
             text = th.text.strip()
             if text == 'ISIN':
                 isin_col = i
-            elif text == 'Брокер':
+            if text == 'Брокер':
                 broker_col = i
-            elif text == 'Ціна':
+            if text == 'Ціна':
                 price_col = i
-        
-        logger.info(f"Column indices - ISIN: {isin_col}, Broker: {broker_col}, Price: {price_col}")
-        
-        if isin_col is None or broker_col is None or price_col is None:
-            logger.error("Could not find required columns")
-            return None
-        
-        # Проходимо по рядках і шукаємо облігацію з ICU ціною
+
         for row in rows[1:]:
             cells = row.find_all('td')
-            
-            if len(cells) <= max(isin_col, broker_col, price_col):
-                continue
-            
-            current_isin = cells[isin_col].text.strip()
-            
-            # Шукаємо нашу облігацію
-            if current_isin.startswith(isin):
-                broker = cells[broker_col].text.strip().lower()
-                price_text = cells[price_col].text.strip()
-                
-                logger.info(f"Found {current_isin} - Broker: {broker}, Price: {price_text}")
-                
-                # Шукаємо ICU брокер
-                if broker == 'icu' and price_text != '-':
-                    try:
-                        price = float(price_text.replace(',', '.'))
-                        if 500 <= price <= 3000:
-                            logger.info(f"✅ Found ICU price: {price}")
-                            return price
-                    except ValueError:
-                        logger.warning(f"Could not parse price: {price_text}")
-                        continue
+            if len(cells) > max(isin_col, broker_col, price_col):
+                current_isin = cells[isin_col].text.strip()
+                if current_isin.startswith(isin):
+                    broker = cells[broker_col].text.strip()
+                    price = cells[price_col].text.strip()
+                    if broker.lower() == 'icu' and price != '-':
+                        logger.info(f"✅ Found ICU price: {price}")
+                        return float(price.replace(',', '.'))
         
         logger.warning(f"ICU price not found for {isin}")
         return None
         
     except Exception as e:
-        logger.error(f"Error fetching bond price: {e}", exc_info=True)
+        logger.error(f"Error fetching bond price: {e}")
         return None
 
 
