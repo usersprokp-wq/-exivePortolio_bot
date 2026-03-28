@@ -572,9 +572,8 @@ async def show_bonds_list(update: Update, context: CallbackContext):
         
         text = "📋 *Останні 20 записів ОВДП:*\n\n"
         for i, bond in enumerate(bonds, 1):
-            text += f"{i}. 📅 {bond.date} | {bond.operation_type}\n"
-            text += f"   🔢 {bond.bond_number} | {bond.quantity} шт | {bond.total_amount} грн\n"
-            text += f"   🏦 {bond.platform}\n\n"
+            text += f"{i}. 📅 {bond.date} | {bond.operation_type} | 🏦 {bond.platform}\n"
+            text += f"   🔢 {bond.bond_number} | {bond.quantity} шт | {bond.total_amount} грн\n\n"
         
         keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data='ovdp')]]
         await query.edit_message_text(
