@@ -7,6 +7,8 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from datetime import datetime
 from dotenv import load_dotenv
+from google_sheets import GoogleSheetsManager
+
 
 load_dotenv()
 
@@ -45,9 +47,19 @@ if DATABASE_URL:
     Base.metadata.create_all(engine)
     Session = sessionmaker(bind=engine)
     logger.info("База даних підключена")
+    
+    # Підключаємо Google Sheets
+    try:
+        from google_sheets import GoogleSheetsManager
+        sheets_manager = GoogleSheetsManager()
+        logger.info("Google Sheets підключено")
+    except Exception as e:
+        logger.error(f"Google Sheets помилка: {e}")
+        sheets_manager = None
 else:
     logger.error("DATABASE_URL не знайдено")
     Session = None
+    sheets_manager = None
 
 async def start(update: Update, context: CallbackContext):
     keyboard = [
@@ -134,7 +146,11 @@ async def button_handler(update: Update, context: CallbackContext):
             [InlineKeyboardButton("🔙 Назад", callback_data='back_to_menu')]
         ]
         await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+    elif query.data == 'sync_db_to_sheets':
+        await sync_bonds_to_sheets(update, context)
         
+    elif query.data == 'sync_sheets_to_db':
+        await query.edit_message_text("🔄 Синхронізація Excel → БД\n\n(в розробці)", parse_mode='Markdown')
 
 
     elif query.data.startswith('date_'):
@@ -381,6 +397,56 @@ async def handle_message(update: Update, context: CallbackContext):
             await update.message.reply_text("❌ Введіть ціле число:")
     else:
         await update.message.reply_text("Використайте /start")
+
+
+async def sync_bonds_to_sheets(update: Update, context: CallbackContext):
+    """Синхронізація даних ОВДП з Google Sheets"""
+    query = update.callback_query
+    await query.answer()
+    await query.edit_message_text("🔄 Синхронізація даних з Google Sheets...")
+    
+    try:
+        if not Session or not sheets_manager:
+            await query.edit_message_text("❌ Помилка підключення до бази даних або Google Sheets")
+            return
+        
+        session = Session()
+        bonds = session.query(Bond).all()
+        
+        if not bonds:
+            await query.edit_message_text("⚠️ Немає даних для синхронізації")
+            session.close()
+            return
+        
+        # Перетворюємо в список словників
+        bonds_data = []
+        for bond in bonds:
+            bonds_data.append({
+                'date': bond.date,
+                'operation_type': bond.operation_type,
+                'bond_number': bond.bond_number,
+                'maturity_date': bond.maturity_date,
+                'price_per_unit': bond.price_per_unit,
+                'quantity': bond.quantity,
+                'total_amount': bond.total_amount,
+                'platform': bond.platform
+            })
+        
+        session.close()
+        
+        # Експортуємо в Google Sheets
+        sheets_manager.export_bonds_to_sheets(bonds_data)
+        
+        await query.edit_message_text(
+            f"✅ *Синхронізація завершена!*\n\n"
+            f"📊 Експортовано {len(bonds_data)} записів ОВДП\n"
+            f"📄 Таблиця: {os.getenv('SPREADSHEET_NAME', 'Telegram Bot Data')}",
+            parse_mode='Markdown'
+        )
+        
+    except Exception as e:
+        logger.error(f"Sync error: {e}")
+        await query.edit_message_text(f"❌ Помилка синхронізації: {str(e)}")
 
 def main():
     app = Application.builder().token(BOT_TOKEN).build()
