@@ -32,6 +32,12 @@ def fetch_bond_price_icu(bond_number):
             logger.warning("Table not found on uainvest")
             return None
         
+        # Формуємо варіанти пошуку (з UA префіксом і без)
+        search_variants = [
+            f"UA{bond_number}",
+            str(bond_number)
+        ]
+        
         # Проходимо по рядках таблиці
         for row in table.find_all('tr'):
             cells = row.find_all('td')
@@ -41,8 +47,8 @@ def fetch_bond_price_icu(bond_number):
             # Перший стовпець - номер облігації
             bond_num = cells[0].get_text(strip=True)
             
-            # Перевіряємо чи це наша облігація
-            if bond_num.strip() == str(bond_number).strip():
+            # Перевіряємо чи це наша облігація (з UA або без)
+            if bond_num.strip() in search_variants:
                 # Шукаємо ICU ціну (зазвичай це один з стовпців)
                 # Структура може відрізнятися, тому перебираємо
                 for cell in cells[1:]:
@@ -51,6 +57,7 @@ def fetch_bond_price_icu(bond_number):
                     try:
                         price = float(cell_text.replace(',', '.'))
                         if price > 0 and price < 10000:  # Логічна перевірка ціни
+                            logger.info(f"Found price for {bond_number}: {price}")
                             return price
                     except ValueError:
                         continue
