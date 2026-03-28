@@ -756,8 +756,7 @@ async def show_bonds_stats(update: Update, context: CallbackContext):
         # Формуємо текст
         text = "📊 *Статистика ОВДП*\n\n"
         
-        text += "💰 *Вартість ОВДП:*\n"
-        text += f"   {current_portfolio:.0f} грн\n"
+        text += f"   Вартість ОВДП: {current_portfolio:.0f} грн\n"
         text += f"   Кількість ОВДП: {total_quantity} шт\n\n"
         
         text += "🏦 *Інвестування по платформах:*\n"
