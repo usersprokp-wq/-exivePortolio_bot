@@ -79,57 +79,72 @@ def fetch_bond_price_icu(bond_number):
 
 def calculate_monthly_profit(bonds):
     """
-    Розраховує прибуток по місяцях
-    Повертає словник {месяц: прибуток}
+    Розраховує прибуток по місяцях з використанням FIFO методу.
     """
-    monthly_profit = {}
+    from collections import defaultdict, deque
+    from datetime import datetime
     
-    # Розраховуємо середню ціну купівлі для кожного номера
-    bond_avg_prices = {}
-    for bond in bonds:
+    def parse_date(date_str):
+        """Парсує дату з формату ДД.ММ.РРРР або ДД.ММ.РРРРр."""
+        try:
+            cleaned = str(date_str).strip().replace('р.', '').replace('р', '').strip()
+            return datetime.strptime(cleaned, '%d.%m.%Y')
+        except:
+            return datetime.max
+    
+    def get_month_year(date_str):
+        """Витягує місяць.рік з дати"""
+        parsed = parse_date(date_str)
+        if parsed == datetime.max:
+            return "невідома дата"
+        return f"{parsed.month:02d}.{parsed.year}"
+    
+    bond_stats = defaultdict(lambda: {
+        'buy_queue': deque(),
+        'profit': 0
+    })
+    
+    # Сортуємо по даті для правильного FIFO
+    sorted_bonds = sorted(bonds, key=lambda x: (
+        parse_date(x.date),
+        0 if x.operation_type == 'купівля' else 1
+    ))
+    
+    monthly_profit = defaultdict(float)
+    
+    for bond in sorted_bonds:
         bond_num = bond.bond_number
-        if bond_num not in bond_avg_prices:
-            bond_avg_prices[bond_num] = {
-                'buy_total': 0,
-                'buy_quantity': 0
-            }
         
         if bond.operation_type == 'купівля':
-            bond_avg_prices[bond_num]['buy_total'] += bond.total_amount
-            bond_avg_prices[bond_num]['buy_quantity'] += bond.quantity
-    
-    # Розраховуємо середню ціну для кожного номера
-    for bond_num in bond_avg_prices:
-        if bond_avg_prices[bond_num]['buy_quantity'] > 0:
-            bond_avg_prices[bond_num]['avg_price'] = (
-                bond_avg_prices[bond_num]['buy_total'] / 
-                bond_avg_prices[bond_num]['buy_quantity']
-            )
-        else:
-            bond_avg_prices[bond_num]['avg_price'] = 0
-    
-    # Обробляємо продажі по місяцях
-    for bond in bonds:
-        if bond.operation_type == 'продаж':
-            # Витягуємо місяць з дати (формат ДД.ММ.РРРР -> ММ.РРРР)
-            date_parts = bond.date.split('.')
-            if len(date_parts) >= 2:
-                month_year = f"{date_parts[1]}.{date_parts[2]}"
-            else:
-                month_year = bond.date
+            bond_stats[bond_num]['buy_queue'].append({
+                'price': bond.price_per_unit,
+                'quantity': bond.quantity,
+                'date': bond.date
+            })
+        
+        elif bond.operation_type == 'продаж':
+            remaining_quantity = bond.quantity
+            sale_profit = 0
             
-            if month_year not in monthly_profit:
-                monthly_profit[month_year] = 0
+            while remaining_quantity > 0 and bond_stats[bond_num]['buy_queue']:
+                buy = bond_stats[bond_num]['buy_queue'][0]
+                
+                qty_to_sell = min(remaining_quantity, buy['quantity'])
+                profit_per_unit = bond.price_per_unit - buy['price']
+                partition_profit = profit_per_unit * qty_to_sell
+                sale_profit += partition_profit
+                
+                buy['quantity'] -= qty_to_sell
+                remaining_quantity -= qty_to_sell
+                
+                if buy['quantity'] == 0:
+                    bond_stats[bond_num]['buy_queue'].popleft()
             
-            # Розраховуємо прибуток
-            bond_num = bond.bond_number
-            avg_price = bond_avg_prices[bond_num]['avg_price']
-            profit_per_unit = bond.price_per_unit - avg_price
-            total_profit = profit_per_unit * bond.quantity
-            
-            monthly_profit[month_year] += total_profit
+            # Додаємо прибуток до місяця продажу
+            month_year = get_month_year(bond.date)
+            monthly_profit[month_year] += sale_profit
     
-    return monthly_profit
+    return dict(monthly_profit)
 
 
 def calculate_profit_by_price(bonds):
