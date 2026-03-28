@@ -101,25 +101,26 @@ def fetch_bond_price_icu(bond_number):
                     if 'icu' in row_text:
                         logger.info("Found ICU row, extracting price...")
                         
-                        # Ціна знаходиться в НАСТУПНІЙ <td> після bank-logo-container
+                        # Беремо всі TD в рядку і шукаємо першу число в діапазоні 500-3000
                         try:
-                            bank_container = row.find_element(By.CLASS_NAME, "bank-logo-container")
-                            # Батьківська TD цього контейнера
-                            icu_td = bank_container.find_element(By.XPATH, "ancestor::td")
-                            # Отримуємо наступну TD (там ціна)
-                            next_td = icu_td.find_element(By.XPATH, "following-sibling::td[1]")
+                            cells = row.find_elements(By.TAG_NAME, "td")
+                            logger.info(f"ICU row has {len(cells)} cells")
                             
-                            price_text = next_td.text.strip()
-                            logger.info(f"Extracted price text: {price_text}")
-                            
-                            if price_text and price_text != '-':
+                            for i, cell in enumerate(cells):
+                                price_text = cell.text.strip()
+                                logger.debug(f"Cell {i}: {price_text}")
+                                
+                                if not price_text or price_text == '-':
+                                    continue
+                                
                                 try:
                                     price = float(price_text.replace(',', '.'))
-                                    if 0.1 < price < 10000:
-                                        logger.info(f"Found ICU price: {price}")
+                                    # Ціна ОВДП зазвичай 500-3000 грн
+                                    if 500 <= price <= 3000:
+                                        logger.info(f"Found ICU price at cell {i}: {price}")
                                         return price
-                                except ValueError as e:
-                                    logger.warning(f"Could not parse price: {price_text}")
+                                except ValueError:
+                                    continue
                         except Exception as e:
                             logger.error(f"Error extracting price: {e}")
                         
