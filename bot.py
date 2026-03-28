@@ -609,6 +609,11 @@ async def show_bonds_portfolio(update: Update, context: CallbackContext, platfor
         platform_name = "Всі"
         if platform:
             filtered_bonds = [b for b in bonds if b.platform.upper() == platform.upper()]
+                    # Тимчасове логування
+        logger.info(f"=== Фільтр по платформі: {platform} ===")
+        for b in bonds:
+            logger.info(f"Bond: {b.bond_number}, platform: '{b.platform}'")
+        logger.info(f"Знайдено після фільтра: {len(filtered_bonds)}")
             platform_name = platform
         
         if not filtered_bonds:
