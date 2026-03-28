@@ -9,15 +9,6 @@ logger = logging.getLogger(__name__)
 
 DATABASE_URL = os.getenv('DATABASE_URL')
 
-# Імпортуємо Session з основного bot.py або ініціалізуємо тут
-Session = None
-
-
-def set_session(session):
-    """Встановити сесію БД"""
-    global Session
-    Session = session
-
 
 async def start(update: Update, context: CallbackContext):
     """Головне меню"""
@@ -118,6 +109,7 @@ async def sync_bonds_to_sheets(update: Update, context: CallbackContext):
     
     try:
         sheets_manager = context.bot_data.get('sheets_manager')
+        Session = context.bot_data.get('Session')
         
         if not sheets_manager or not Session:
             await query.edit_message_text("❌ Помилка: Google Sheets або БД не доступні")

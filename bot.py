@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 
 from models import Base
 from google_sheets import GoogleSheetsManager
-from handlers.common import start, button_handler_main, set_session
+from handlers.common import start, button_handler_main
 
 # Імпортуємо обробники по категоріях
 from handlers.ovdp import button_handler_ovdp, handle_message_ovdp
@@ -38,7 +38,6 @@ def initialize_database():
         engine = create_engine(DATABASE_URL)
         Base.metadata.create_all(engine)
         Session = sessionmaker(bind=engine)
-        set_session(Session)
         logger.info("База даних підключена")
         return True
     except Exception as e:
@@ -62,6 +61,7 @@ def initialize_sheets():
 async def post_init(app: Application):
     """Викликається після ініціалізації Application"""
     app.bot_data['sheets_manager'] = sheets_manager
+    app.bot_data['Session'] = Session
 
 
 def main():

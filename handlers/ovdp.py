@@ -9,15 +9,6 @@ from models import Bond, ProfitRecord
 
 logger = logging.getLogger(__name__)
 
-# Буде встановлено з bot.py
-Session = None
-
-
-def set_session(session):
-    """Встановити сесію БД"""
-    global Session
-    Session = session
-
 
 async def button_handler_ovdp(update: Update, context: CallbackContext):
     """Обробник кнопок для ОВДП"""
@@ -206,6 +197,7 @@ async def handle_message_ovdp(update: Update, context: CallbackContext):
 async def save_bond(update: Update, context: CallbackContext):
     """Зберігає облігацію в базу даних"""
     try:
+        Session = context.bot_data.get('Session')
         if not Session:
             await update.callback_query.edit_message_text("❌ Помилка підключення до бази даних")
             return
@@ -258,6 +250,7 @@ async def show_bonds_list(update: Update, context: CallbackContext):
     await query.answer()
     
     try:
+        Session = context.bot_data.get('Session')
         if not Session:
             await query.edit_message_text("❌ Помилка підключення до бази даних")
             return
@@ -288,6 +281,7 @@ async def show_bonds_list(update: Update, context: CallbackContext):
         )
         
     except Exception as e:
+        logger.error(f"Error in show_bonds_list: {e}")
         await query.edit_message_text(f"❌ Помилка: {str(e)}")
 
 
@@ -297,6 +291,7 @@ async def show_bonds_portfolio(update: Update, context: CallbackContext, platfor
     await query.answer()
     
     try:
+        Session = context.bot_data.get('Session')
         if not Session:
             await query.edit_message_text("❌ Помилка підключення до бази даних")
             return
@@ -397,6 +392,7 @@ async def show_bonds_stats(update: Update, context: CallbackContext):
     await query.answer()
     
     try:
+        Session = context.bot_data.get('Session')
         if not Session:
             await query.edit_message_text("❌ Помилка підключення до бази даних")
             return
@@ -523,6 +519,7 @@ async def show_profit_menu(update: Update, context: CallbackContext):
     await query.answer()
     
     try:
+        Session = context.bot_data.get('Session')
         if not Session:
             await query.edit_message_text("❌ Помилка підключення до бази даних")
             return
