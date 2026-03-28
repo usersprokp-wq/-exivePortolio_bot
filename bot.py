@@ -474,10 +474,13 @@ async def sync_bonds_to_sheets(update: Update, context: CallbackContext):
                 'total_quantity': data['total_quantity'],
                 'avg_price': round(data['total_amount'] / data['total_quantity'], 2) if data['total_quantity'] > 0 else 0,
                 'total_amount': data['total_amount']
-            })
+        })
         
-    
+        # Експортуємо портфель
+        sheets_manager.export_bonds_portfolio(portfolio_data)
         
+        session.close()
+        await query.edit_message_text("✅ Синхронізація завершена успішно!")
     except Exception as e:
         logger.error(f"Sync error: {e}")
         await query.edit_message_text(f"❌ Помилка: {str(e)}")
