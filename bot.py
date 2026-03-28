@@ -271,7 +271,14 @@ async def handle_message(update: Update, context: CallbackContext):
             await update.message.reply_text("📈 Введіть термін до (дату погашення ДД.ММ.РРРР):")
             
         elif step == 'maturity_date':
-            context.user_data['bond_maturity_date'] = update.message.text
+            date_value = update.message.text
+            # Перевіряємо чи є крапка
+            if '.' not in date_value:
+                await update.message.reply_text("❌ Використовуйте крапку! Наприклад: 10.12.2025")
+                return
+            # Замінюємо коми на крапки, якщо є
+            date_value = date_value.replace(',', '.')
+            context.user_data['bond_maturity_date'] = date_value
             context.user_data['bond_step'] = 'price_per_unit'
             await update.message.reply_text("📈 Введіть ціну за шт:")
             
@@ -439,10 +446,12 @@ async def sync_bonds_to_sheets(update: Update, context: CallbackContext):
         for bond in bonds:
             if bond.operation_type == 'купівля':
                 num = bond.bond_number
+                # Форматуємо дату: замінюємо кому на крапку
+                maturity = bond.maturity_date.replace(',', '.')
                 if num not in portfolio:
                     portfolio[num] = {
                         'bond_number': num,
-                        'maturity_date': bond.maturity_date,
+                        'maturity_date': maturity,
                         'total_quantity': 0,
                         'total_amount': 0,
                         'total_price': 0
@@ -450,7 +459,7 @@ async def sync_bonds_to_sheets(update: Update, context: CallbackContext):
                 portfolio[num]['total_quantity'] += bond.quantity
                 portfolio[num]['total_amount'] += bond.total_amount
                 portfolio[num]['total_price'] += bond.price_per_unit * bond.quantity
-        
+
         # Розраховуємо середню ціну
         portfolio_data = []
         for num, data in portfolio.items():
@@ -458,8 +467,8 @@ async def sync_bonds_to_sheets(update: Update, context: CallbackContext):
                 'bond_number': num,
                 'maturity_date': data['maturity_date'],
                 'total_quantity': data['total_quantity'],
-                'total_amount': data['total_amount'],
-                'avg_price': round(data['total_amount'] / data['total_quantity'], 2) if data['total_quantity'] > 0 else 0
+                'avg_price': round(data['total_amount'] / data['total_quantity'], 2) if data['total_quantity'] > 0 else 0,
+                'total_amount': data['total_amount']
             })
         
         sheets_manager.export_bonds_portfolio(portfolio_data)
