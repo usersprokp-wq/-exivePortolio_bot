@@ -711,81 +711,97 @@ async def show_bonds_stats(update: Update, context: CallbackContext):
         total_buy = 0
         total_sell = 0
         total_quantity = 0
-        platform_stats = {'ICU': {'buy': 0, 'sell': 0}, 'SENSBANK': {'buy': 0, 'sell': 0}, 'Інші': {'buy': 0, 'sell': 0}}
-        monthly_stats = {}
-        total_amount = 0
-        operation_count = 0
+        platform_stats = {'ICU': 0, 'SENSBANK': 0}
+        monthly_profit = {}
+        portfolio_by_bond = {}  # для найближчих виплат
         
         for bond in bonds:
             amount = bond.total_amount
-            total_amount += amount
-            operation_count += 1
             
             if bond.operation_type == 'купівля':
                 total_buy += amount
                 total_quantity += bond.quantity
+                # Збираємо портфель для виплат
+                if bond.bond_number not in portfolio_by_bond:
+                    portfolio_by_bond[bond.bond_number] = {
+                        'maturity_date': bond.maturity_date,
+                        'quantity': 0,
+                        'total_amount': 0
+                    }
+                portfolio_by_bond[bond.bond_number]['quantity'] += bond.quantity
+                portfolio_by_bond[bond.bond_number]['total_amount'] += amount
             else:
                 total_sell += amount
             
-            # Статистика по платформах
+            # Статистика по платформах (тільки купівлі)
             platform = bond.platform.upper()
-            if platform == 'ICU':
-                if bond.operation_type == 'купівля':
-                    platform_stats['ICU']['buy'] += amount
-                else:
-                    platform_stats['ICU']['sell'] += amount
-            elif platform == 'SENSBANK':
-                if bond.operation_type == 'купівля':
-                    platform_stats['SENSBANK']['buy'] += amount
-                else:
-                    platform_stats['SENSBANK']['sell'] += amount
-            else:
-                if bond.operation_type == 'купівля':
-                    platform_stats['Інші']['buy'] += amount
-                else:
-                    platform_stats['Інші']['sell'] += amount
-            
-            # Статистика по місяцях
-            month = bond.date[:7] if len(bond.date) >= 7 else bond.date
-            if month not in monthly_stats:
-                monthly_stats[month] = {'buy': 0, 'sell': 0}
             if bond.operation_type == 'купівля':
-                monthly_stats[month]['buy'] += amount
+                if platform == 'ICU':
+                    platform_stats['ICU'] += amount
+                elif platform == 'SENSBANK':
+                    platform_stats['SENSBANK'] += amount
+            
+            # Динаміка прибутку по місяцях
+            month = bond.date[:7] if len(bond.date) >= 7 else bond.date
+            if month not in monthly_profit:
+                monthly_profit[month] = 0
+            if bond.operation_type == 'купівля':
+                monthly_profit[month] -= amount
             else:
-                monthly_stats[month]['sell'] += amount
+                monthly_profit[month] += amount
         
         current_portfolio = total_buy - total_sell
-        avg_operation = total_amount / operation_count if operation_count > 0 else 0
+        total_profit = total_sell - total_buy
         
         # Формуємо текст
         text = "📊 *Статистика ОВДП*\n\n"
         
-        text += "💰 *Загальна вартість:*\n"
-        text += f"   Всього куплено: {total_buy:.0f} грн\n"
-        text += f"   Всього продано: {total_sell:.0f} грн\n"
-        text += f"   Поточна вартість: {current_portfolio:.0f} грн\n"
+        text += "💰 *Вартість ОВДП:*\n"
+        text += f"   {current_portfolio:.0f} грн\n"
         text += f"   Кількість ОВДП: {total_quantity} шт\n\n"
         
         text += "🏦 *Інвестування по платформах:*\n"
-        text += f"   СЕНС: {platform_stats['Інші']['buy']:.0f} грн\n"
-        text += f"   ICU: {platform_stats['ICU']['buy']:.0f} грн\n"
-        text += f"   SENSBANK: {platform_stats['SENSBANK']['buy']:.0f} грн\n\n"
+        text += f"   ICU: {platform_stats['ICU']:.0f} грн\n"
+        text += f"   SENSBANK: {platform_stats['SENSBANK']:.0f} грн\n\n"
         
         text += "📈 *Загальний прибуток:*\n"
-        profit = total_sell - total_buy
-        text += f"   {profit:.0f} грн\n\n"
+        text += f"   {total_profit:.0f} грн\n\n"
         
-        text += "📊 *Динаміка по місяцях:*\n"
-        for month in sorted(monthly_stats.keys()):
-            buy = monthly_stats[month]['buy']
-            sell = monthly_stats[month]['sell']
-            text += f"   {month}: купівля {buy:.0f} грн | продаж {sell:.0f} грн\n"
+        text += "📊 *Динаміка прибутку по місяцях:*\n"
+        for month in sorted(monthly_profit.keys()):
+            profit = monthly_profit[month]
+            text += f"   {month}: {profit:.0f} грн\n"
         text += "\n"
         
-        text += f"📊 *Середня сума операції:* {avg_operation:.0f} грн\n\n"
-        
+        # Найближчі виплати (з портфеля)
         text += "💸 *Найближчі виплати:*\n"
-        text += "   (в розробці)\n"
+        
+        from datetime import datetime
+        today = datetime.now()
+        
+        # Збираємо дати погашення
+        payments = []
+        for bond_num, data in portfolio_by_bond.items():
+            try:
+                maturity = datetime.strptime(data['maturity_date'], '%d.%m.%Y')
+                if maturity > today:
+                    payments.append({
+                        'date': maturity,
+                        'bond_number': bond_num,
+                        'quantity': data['quantity'],
+                        'amount': data['total_amount']
+                    })
+            except:
+                pass
+        
+        # Сортуємо за датою
+        payments.sort(key=lambda x: x['date'])
+        
+        if payments:
+            for p in payments[:5]:  # Показуємо 5 найближчих
+                text += f"   {p['date'].strftime('%d.%m.%Y')} - {p['quantity']} шт\n"
+        else:
+            text += "   Немає майбутніх виплат\n"
         
         keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data='ovdp')]]
         await query.edit_message_text(
