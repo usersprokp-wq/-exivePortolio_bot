@@ -79,9 +79,8 @@ def fetch_bond_price_icu(bond_number):
 
 def calculate_monthly_profit(bonds):
     """
-    Розраховує прибуток по місяцях з використанням FIFO методу.
+    Розраховує прибуток по місяцях на основі FIFO результатів з calculate_profit_by_price.
     """
-    from collections import defaultdict, deque
     from datetime import datetime
     
     def parse_date(date_str):
@@ -99,52 +98,23 @@ def calculate_monthly_profit(bonds):
             return "невідома дата"
         return f"{parsed.month:02d}.{parsed.year}"
     
-    bond_stats = defaultdict(lambda: {
-        'buy_queue': deque(),
-        'profit': 0
-    })
+    # Отримуємо FIFO результати
+    bond_stats, _ = calculate_profit_by_price(bonds)
     
-    # Сортуємо по даті для правильного FIFO
-    sorted_bonds = sorted(bonds, key=lambda x: (
-        parse_date(x.date),
-        0 if x.operation_type == 'купівля' else 1
-    ))
+    monthly_profit = {}
     
-    monthly_profit = defaultdict(float)
-    
-    for bond in sorted_bonds:
-        bond_num = bond.bond_number
-        
-        if bond.operation_type == 'купівля':
-            bond_stats[bond_num]['buy_queue'].append({
-                'price': bond.price_per_unit,
-                'quantity': bond.quantity,
-                'date': bond.date
-            })
-        
-        elif bond.operation_type == 'продаж':
-            remaining_quantity = bond.quantity
-            sale_profit = 0
+    # Проходимо по кожній облігації та її продажам
+    for bond_num, stats in bond_stats.items():
+        for sale in stats['sales']:
+            month_year = get_month_year(sale['sell_date'])
             
-            while remaining_quantity > 0 and bond_stats[bond_num]['buy_queue']:
-                buy = bond_stats[bond_num]['buy_queue'][0]
-                
-                qty_to_sell = min(remaining_quantity, buy['quantity'])
-                profit_per_unit = bond.price_per_unit - buy['price']
-                partition_profit = profit_per_unit * qty_to_sell
-                sale_profit += partition_profit
-                
-                buy['quantity'] -= qty_to_sell
-                remaining_quantity -= qty_to_sell
-                
-                if buy['quantity'] == 0:
-                    bond_stats[bond_num]['buy_queue'].popleft()
+            if month_year not in monthly_profit:
+                monthly_profit[month_year] = 0
             
-            # Додаємо прибуток до місяця продажу
-            month_year = get_month_year(bond.date)
-            monthly_profit[month_year] += sale_profit
+            # Додаємо прибуток цієї продажі до місяця
+            monthly_profit[month_year] += sale['profit']
     
-    return dict(monthly_profit)
+    return monthly_profit
 
 
 def calculate_profit_by_price(bonds):
@@ -736,7 +706,15 @@ async def show_bonds_stats(update: Update, context: CallbackContext):
         monthly_profits = calculate_monthly_profit(bonds)
         
         if monthly_profits:
-            for month in sorted(monthly_profits.keys()):
+            # Сортуємо по даті, не по текстовому ключу
+            from datetime import datetime
+            def parse_month_year(month_str):
+                try:
+                    return datetime.strptime(month_str, '%m.%Y')
+                except:
+                    return datetime.max
+            
+            for month in sorted(monthly_profits.keys(), key=parse_month_year):
                 profit = monthly_profits[month]
                 text += f"   {month} - {profit:.0f} грн\n"
         else:
