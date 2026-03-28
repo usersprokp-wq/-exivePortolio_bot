@@ -24,120 +24,103 @@ except ImportError:
 
 def fetch_bond_price_icu(bond_number):
     """
-    Парсить ціну облігації з uainvest.com.ua для ICU за допомогою Selenium
-    Повертає ціну або None якщо не знайдено
+    Парсить ціну облігації з uainvest.com.ua для ICU
+    Простіший варіант без Selenium
     """
-    if not SELENIUM_AVAILABLE:
-        logger.warning("Selenium not available")
-        return None
-    
-    driver = None
     try:
-        # Налаштування Chrome для headless режиму
-        chrome_options = Options()
-        chrome_options.add_argument("--headless")
-        chrome_options.add_argument("--no-sandbox")
-        chrome_options.add_argument("--disable-dev-shm-usage")
-        chrome_options.add_argument("--disable-gpu")
-        chrome_options.add_argument("--window-size=1920,1080")
-        chrome_options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
-        
-        driver = webdriver.Chrome(options=chrome_options)
+        import requests
+        from bs4 import BeautifulSoup
         
         url = "https://uainvest.com.ua/ukrbonds"
-        logger.info(f"Fetching price for bond {bond_number}")
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        }
         
-        driver.get(url)
-        time.sleep(3)
+        logger.info(f"Fetching price for bond {bond_number} from {url}")
         
-        # Шукаємо облігацію - вона в <a> тегу з текстом UA[номер]
+        response = requests.get(url, headers=headers, timeout=15)
+        response.encoding = 'utf-8'
+        
+        soup = BeautifulSoup(response.content, 'html.parser')
+        
+        # Шукаємо облігацію по номеру у <a> тегу
         bond_isin = f"UA{bond_number}"
-        xpath_bond = f"//a[contains(text(), '{bond_number}')]"
+        bond_link = soup.find('a', string=lambda s: s and bond_number in s)
         
-        try:
-            bond_link = WebDriverWait(driver, 10).until(
-                EC.presence_of_element_located((By.XPATH, xpath_bond))
-            )
-            logger.info(f"Found bond link: {bond_isin}")
+        if not bond_link:
+            logger.warning(f"Bond link not found for {bond_number}")
+            return None
+        
+        logger.info(f"Found bond link: {bond_link.get_text(strip=True)}")
+        
+        # Батьківський TR облігації
+        bond_tr = bond_link.find_parent('tr')
+        if not bond_tr:
+            logger.warning("Could not find bond TR")
+            return None
+        
+        # Батьківський TBODY
+        tbody = bond_tr.find_parent('tbody')
+        if not tbody:
+            logger.warning("Could not find tbody")
+            return None
+        
+        # Отримуємо всі TR після TR облігації
+        all_rows = tbody.find_all('tr')
+        bond_row_index = all_rows.index(bond_tr)
+        
+        logger.info(f"Bond is at row index {bond_row_index}, searching for ICU in next rows")
+        
+        # Шукаємо ICU рядок серед наступних 10 рядків
+        for i in range(bond_row_index + 1, min(bond_row_index + 10, len(all_rows))):
+            row = all_rows[i]
+            row_text = row.get_text(strip=True).lower()
             
-            # Батьківський TR облігації
-            bond_tr = bond_link.find_element(By.XPATH, "ancestor::tr")
-            
-            # Батьківський TBODY
-            tbody = bond_tr.find_element(By.XPATH, "ancestor::tbody")
-            
-            # Отримуємо індекс рядка облігації
-            all_rows = tbody.find_elements(By.TAG_NAME, "tr")
-            bond_row_index = None
-            
-            for i, row in enumerate(all_rows):
-                try:
-                    if bond_tr in [row]:
-                        bond_row_index = i
-                        break
-                    # Або просто порівнюємо HTML
-                    if bond_link in row.find_elements(By.TAG_NAME, "a"):
-                        bond_row_index = i
-                        break
-                except:
-                    pass
-            
-            if bond_row_index is None:
-                logger.warning("Could not find bond row index")
-                # Спробуємо інший підхід - шукаємо ICU іконку після облігації
-                bond_row_index = 0
-            
-            # Шукаємо рядок з ICU іконкою серед наступних рядків
-            logger.info(f"Searching for ICU in rows after index {bond_row_index}")
-            
-            for i in range(bond_row_index, min(bond_row_index + 10, len(all_rows))):
-                row = all_rows[i]
+            # Перевіряємо чи є ICU в цьому рядку
+            if 'icu' in row_text:
+                logger.info(f"Found ICU row at index {i}")
                 
-                try:
-                    # Шукаємо в рядку картинку з класом "bank-logo-icu"
-                    icu_img = row.find_element(By.CSS_SELECTOR, "img.bank-logo-icu")
-                    logger.info(f"Found ICU image in row {i}")
-                    
-                    # Батьківська TD цієї картинки
-                    icu_td = icu_img.find_element(By.XPATH, "ancestor::td")
-                    
-                    # НАСТУПНА TD (там ціна)
-                    next_td = icu_td.find_element(By.XPATH, "following-sibling::td[1]")
-                    
-                    price_text = next_td.text.strip()
-                    logger.info(f"Found price text: {price_text}")
-                    
-                    if price_text and price_text != '-':
-                        try:
-                            price = float(price_text.replace(',', '.'))
-                            if 500 <= price <= 3000:
-                                logger.info(f"Found ICU price: {price}")
-                                return price
-                        except ValueError:
-                            logger.warning(f"Could not parse price: {price_text}")
-                    
-                    break  # Знайшли ICU, вихідимо
-                    
-                except:
-                    # Цей рядок не має ICU
+                # Шукаємо img з класом "bank-logo-icu"
+                icu_img = row.find('img', class_='bank-logo-icu')
+                if not icu_img:
+                    logger.debug("ICU image not found in this row")
                     continue
-            
-            logger.warning(f"ICU price not found for {bond_number}")
-            return None
-            
-        except Exception as e:
-            logger.error(f"Error finding bond: {e}")
-            return None
-            
-    except Exception as e:
-        logger.error(f"Error fetching bond price: {e}")
+                
+                # Батьківська TD
+                icu_td = icu_img.find_parent('td')
+                if not icu_td:
+                    logger.warning("Could not find ICU TD parent")
+                    continue
+                
+                # Наступна TD (там ціна)
+                next_td = icu_td.find_next_sibling('td')
+                if not next_td:
+                    logger.warning("Could not find next TD after ICU")
+                    continue
+                
+                price_text = next_td.get_text(strip=True)
+                logger.info(f"Found price text: {price_text}")
+                
+                if price_text and price_text != '-':
+                    try:
+                        price = float(price_text.replace(',', '.'))
+                        if 500 <= price <= 3000:
+                            logger.info(f"✅ Found ICU price: {price}")
+                            return price
+                        else:
+                            logger.warning(f"Price {price} is outside valid range")
+                    except ValueError as e:
+                        logger.warning(f"Could not parse price '{price_text}': {e}")
+                
+                # Знайшли ICU рядок, але ціна не валідна
+                break
+        
+        logger.warning(f"ICU price not found for {bond_number}")
         return None
-    finally:
-        if driver:
-            try:
-                driver.quit()
-            except:
-                pass
+        
+    except Exception as e:
+        logger.error(f"Error fetching bond price: {e}", exc_info=True)
+        return None
 
 
 def fetch_bond_price_icu(bond_number):
