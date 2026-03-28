@@ -143,15 +143,23 @@ def calculate_profit_by_price(bonds):
     4. Прибуток = (price_sell - price_buy) * quantity_sell
     """
     from collections import defaultdict, deque
+    from datetime import datetime
     
     bond_stats = defaultdict(lambda: {
-        'buy_queue': deque(),  # Черга купівель [(price, quantity), ...]
+        'buy_queue': deque(),
         'sales': [],
         'profit': 0
     })
     
+    def parse_date(date_str):
+        """Парсує дату з формату ДД.ММ.РРРР"""
+        try:
+            return datetime.strptime(str(date_str).strip(), '%d.%m.%Y')
+        except:
+            return datetime.max
+    
     # Сортуємо по даті для правильного FIFO
-    sorted_bonds = sorted(bonds, key=lambda x: x.date)
+    sorted_bonds = sorted(bonds, key=lambda x: parse_date(x.date))
     
     for bond in sorted_bonds:
         bond_num = bond.bond_number
