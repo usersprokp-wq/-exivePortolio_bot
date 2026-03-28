@@ -50,92 +50,83 @@ def fetch_bond_price_icu(bond_number):
         driver.get(url)
         time.sleep(3)
         
-        # Формуємо ID облігації як на сайті
-        bond_id = f"UA{bond_number}"
+        # Шукаємо облігацію - вона в <a> тегу з текстом UA[номер]
+        bond_isin = f"UA{bond_number}"
+        xpath_bond = f"//a[contains(text(), '{bond_number}')]"
         
-        # Шукаємо рядок облігації по ISIN
         try:
-            # XPath для пошуку облігації - шукаємо по contains замість точного збігу
-            bond_xpath = f"//td[contains(text(), '{bond_number}')]"
-            bond_element = WebDriverWait(driver, 10).until(
-                EC.presence_of_element_located((By.XPATH, bond_xpath))
+            bond_link = WebDriverWait(driver, 10).until(
+                EC.presence_of_element_located((By.XPATH, xpath_bond))
             )
-            logger.info(f"Found bond {bond_number}")
+            logger.info(f"Found bond link: {bond_isin}")
             
-            # Клікаємо на облігацію щоб розкрити список брокерів
-            bond_row = bond_element.find_element(By.XPATH, "ancestor::tr")
-            driver.execute_script("arguments[0].click();", bond_row)
-            time.sleep(2)
+            # Батьківський TR облігації
+            bond_tr = bond_link.find_element(By.XPATH, "ancestor::tr")
             
-            # Шукаємо всі рядки після облігації (рядки брокерів)
-            # Вони мають назву брокера в одному стовпці і ціну в іншому
-            tbody = bond_row.find_element(By.XPATH, "ancestor::tbody")
+            # Батьківський TBODY
+            tbody = bond_tr.find_element(By.XPATH, "ancestor::tbody")
+            
+            # Отримуємо індекс рядка облігації
             all_rows = tbody.find_elements(By.TAG_NAME, "tr")
+            bond_row_index = None
             
-            bond_idx = None
             for i, row in enumerate(all_rows):
                 try:
-                    if bond_element in row.find_elements(By.TAG_NAME, "td"):
-                        bond_idx = i
+                    if bond_tr in [row]:
+                        bond_row_index = i
+                        break
+                    # Або просто порівнюємо HTML
+                    if bond_link in row.find_elements(By.TAG_NAME, "a"):
+                        bond_row_index = i
                         break
                 except:
                     pass
             
-            if bond_idx is None:
-                logger.warning("Could not find bond index")
-                return None
+            if bond_row_index is None:
+                logger.warning("Could not find bond row index")
+                # Спробуємо інший підхід - шукаємо ICU іконку після облігації
+                bond_row_index = 0
             
-            # Проходимо по рядках брокерів після облігації
-            for i in range(bond_idx + 1, len(all_rows)):
-                try:
-                    row = all_rows[i]
-                    cells = row.find_elements(By.TAG_NAME, "td")
-                    
-                    # Якщо рядок пустий або це нова облігація - зупиняємось
-                    if len(cells) < 2:
-                        break
-                    
-                    # Перевіряємо чи це рядок брокера
-                    row_text = row.text.lower()
-                    
-                    if 'icu' in row_text:
-                        logger.info("Found ICU row, extracting price...")
-                        
-                        # Беремо всі TD в рядку і шукаємо першу число в діапазоні 500-3000
-                        try:
-                            cells = row.find_elements(By.TAG_NAME, "td")
-                            logger.info(f"ICU row has {len(cells)} cells")
-                            
-                            for i, cell in enumerate(cells):
-                                price_text = cell.text.strip()
-                                logger.debug(f"Cell {i}: {price_text}")
-                                
-                                if not price_text or price_text == '-':
-                                    continue
-                                
-                                try:
-                                    price = float(price_text.replace(',', '.'))
-                                    # Ціна ОВДП зазвичай 500-3000 грн
-                                    if 500 <= price <= 3000:
-                                        logger.info(f"Found ICU price at cell {i}: {price}")
-                                        return price
-                                except ValueError:
-                                    continue
-                        except Exception as e:
-                            logger.error(f"Error extracting price: {e}")
-                        
-                        # Якщо ICU знайдено але ціна не знайдена
-                        break
+            # Шукаємо рядок з ICU іконкою серед наступних рядків
+            logger.info(f"Searching for ICU in rows after index {bond_row_index}")
+            
+            for i in range(bond_row_index, min(bond_row_index + 10, len(all_rows))):
+                row = all_rows[i]
                 
-                except Exception as e:
-                    logger.debug(f"Error processing broker row: {e}")
+                try:
+                    # Шукаємо в рядку картинку з класом "bank-logo-icu"
+                    icu_img = row.find_element(By.CSS_SELECTOR, "img.bank-logo-icu")
+                    logger.info(f"Found ICU image in row {i}")
+                    
+                    # Батьківська TD цієї картинки
+                    icu_td = icu_img.find_element(By.XPATH, "ancestor::td")
+                    
+                    # НАСТУПНА TD (там ціна)
+                    next_td = icu_td.find_element(By.XPATH, "following-sibling::td[1]")
+                    
+                    price_text = next_td.text.strip()
+                    logger.info(f"Found price text: {price_text}")
+                    
+                    if price_text and price_text != '-':
+                        try:
+                            price = float(price_text.replace(',', '.'))
+                            if 500 <= price <= 3000:
+                                logger.info(f"Found ICU price: {price}")
+                                return price
+                        except ValueError:
+                            logger.warning(f"Could not parse price: {price_text}")
+                    
+                    break  # Знайшли ICU, вихідимо
+                    
+                except:
+                    # Цей рядок не має ICU
                     continue
             
             logger.warning(f"ICU price not found for {bond_number}")
             return None
             
         except Exception as e:
-            logger.error(f"Error finding bond {bond_id}: {e}")
+            logger.error(f"Error finding bond: {e}")
             return None
             
     except Exception as e:
