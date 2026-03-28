@@ -358,7 +358,6 @@ async def handle_message(update: Update, context: CallbackContext):
             )
             
         elif step == 'operation_type':
-            # Пропонуємо вибір типу операції через кнопки
             keyboard = [
                 [InlineKeyboardButton("🟢 Купівля", callback_data='bond_buy')],
                 [InlineKeyboardButton("🔴 Продаж", callback_data='bond_sell')]
@@ -367,7 +366,7 @@ async def handle_message(update: Update, context: CallbackContext):
                 "📈 Виберіть тип операції:",
                 reply_markup=InlineKeyboardMarkup(keyboard)
             )
-            return  # Виходимо, бо чекаємо на callback
+            return
             
         elif step == 'bond_number':
             context.user_data['bond_number'] = update.message.text
@@ -376,11 +375,9 @@ async def handle_message(update: Update, context: CallbackContext):
             
         elif step == 'maturity_date':
             date_value = update.message.text
-            # Перевіряємо чи є крапка
             if '.' not in date_value:
                 await update.message.reply_text("❌ Використовуйте крапку! Наприклад: 10.12.2025")
                 return
-            # Замінюємо коми на крапки, якщо є
             date_value = date_value.replace(',', '.')
             context.user_data['bond_maturity_date'] = date_value
             context.user_data['bond_step'] = 'price_per_unit'
@@ -413,22 +410,21 @@ async def handle_message(update: Update, context: CallbackContext):
             except:
                 await update.message.reply_text("❌ Введіть ціле число:")
                 
-        elif step == 'total_amount':
-            try:
-                context.user_data['bond_total_amount'] = float(update.message.text)
-                context.user_data['bond_step'] = 'platform'
-                await update.message.reply_text("📈 Введіть платформу (наприклад: ПриватБанк, Тіндер):")
-            except:
-                await update.message.reply_text("❌ Введіть число:")
-                
         elif step == 'total_amount_manual':
             try:
                 context.user_data['bond_total_amount'] = float(update.message.text)
                 context.user_data['bond_step'] = 'platform'
-                await update.message.reply_text("📈 Введіть платформу:")
+                keyboard = [
+                    [InlineKeyboardButton("🏦 ICU", callback_data='platform_icu')],
+                    [InlineKeyboardButton("🏦 SENSBANK", callback_data='platform_sensbank')]
+                ]
+                await update.message.reply_text(
+                    "📈 Виберіть платформу:",
+                    reply_markup=InlineKeyboardMarkup(keyboard)
+                )
             except:
-                await update.message.reply_text("❌ Введіть число:")            
-
+                await update.message.reply_text("❌ Введіть число:")
+                
         elif step == 'platform':
             keyboard = [
                 [InlineKeyboardButton("🏦 ICU", callback_data='platform_icu')],
@@ -439,51 +435,8 @@ async def handle_message(update: Update, context: CallbackContext):
                 reply_markup=InlineKeyboardMarkup(keyboard)
             )
             return
-            
-            # Зберігаємо в базу даних
-            session = Session()
-            bond = Bond(
-                date=context.user_data['bond_date'],
-                operation_type=context.user_data['bond_operation_type'],
-                bond_number=context.user_data['bond_number'],
-                maturity_date=context.user_data['bond_maturity_date'],
-                price_per_unit=context.user_data['bond_price_per_unit'],
-                quantity=context.user_data['bond_quantity'],
-                total_amount=context.user_data['bond_total_amount'],
-                platform=context.user_data['bond_platform']
-            )
-            session.add(bond)
-            session.commit()
-            
-            # Зберігаємо дані перед закриттям сесії
-            bond_data = {
-                'date': bond.date,
-                'operation_type': bond.operation_type,
-                'bond_number': bond.bond_number,
-                'maturity_date': bond.maturity_date,
-                'price_per_unit': bond.price_per_unit,
-                'quantity': bond.quantity,
-                'total_amount': bond.total_amount,
-                'platform': bond.platform
-            }
-            session.close()
-            
-            keyboard = [[InlineKeyboardButton("🔙 Назад до ОВДП", callback_data='ovdp')]]
-            await update.message.reply_text(
-                f"✅ *ОВДП додано!*\n\n"
-                f"📅 Дата: {bond_data['date']}\n"
-                f"🔄 Тип: {bond_data['operation_type']}\n"
-                f"🔢 Номер: {bond_data['bond_number']}\n"
-                f"📆 Термін до: {bond_data['maturity_date']}\n"
-                f"💰 Ціна: {bond_data['price_per_unit']} грн\n"
-                f"📦 Кількість: {bond_data['quantity']}\n"
-                f"💵 Сума: {bond_data['total_amount']} грн\n"
-                f"🏦 Платформа: {bond_data['platform']}",
-                reply_markup=InlineKeyboardMarkup(keyboard),
-                parse_mode='Markdown'
-            )
     
-    # Старий код для товарів (можна видалити пізніше)
+    # Старий код для товарів
     elif context.user_data.get('adding'):
         context.user_data['name'] = update.message.text
         context.user_data['awaiting_price'] = True
