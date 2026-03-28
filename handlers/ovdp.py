@@ -891,10 +891,15 @@ async def sync_bonds_from_sheets(update: Update, context: CallbackContext):
             await query.edit_message_text("📭 Немає даних в Excel для синхронізації")
             return
         
-        session = Session()
-        db_bonds = session.query(Bond).all()
-        
-        logger.info(f"DEBUG: db_bonds loaded, count = {len(db_bonds)}")
+        try:
+            session = Session()
+            db_bonds = session.query(Bond).all()
+            logger.info(f"DEBUG: db_bonds loaded, count = {len(db_bonds)}")
+        except Exception as e:
+            logger.error(f"DEBUG: Error loading db_bonds: {e}")
+            session.close()
+            await query.edit_message_text(f"❌ Помилка завантаження БД: {str(e)}")
+            return
         
         # Створюємо словники для порівняння
         excel_keys = set()
