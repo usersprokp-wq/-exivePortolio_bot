@@ -84,16 +84,15 @@ class GoogleSheetsManager:
             if not portfolio_data:
                 return
             
-            headers = ['Номер ОВДП', 'Термін до', 'Кількість', 'Сума', 'Середня ціна']
-            worksheet.append_row(headers)
+            headers = ['Номер ОВДП', 'Термін до', 'Кількість', 'Середня ціна', 'Сума (загальна)']
             
             for item in portfolio_data:
                 row = [
                     item.get('bond_number', ''),
                     item.get('maturity_date', ''),
                     item.get('total_quantity', 0),
-                    item.get('total_amount', 0),
-                    item.get('avg_price', 0)
+                    item.get('avg_price', 0),
+                    item.get('total_amount', 0)
                 ]
                 worksheet.append_row(row)
             
