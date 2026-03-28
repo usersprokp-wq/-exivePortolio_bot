@@ -54,6 +54,13 @@ async def button_handler_ovdp(update: Update, context: CallbackContext):
         platform = query.data.replace('platform_', '')
         context.user_data['platform'] = platform.upper()
         await save_bond(update, context)
+    
+    elif query.data == 'write_off_profit':
+        await write_off_profit_menu(update, context)
+    
+    elif query.data == 'confirm_write_off':
+        context.user_data['profit_step'] = 'enter_amount'
+        await query.edit_message_text("💰 Введіть суму для списання:", parse_mode='Markdown')
 
 
 async def show_ovdp_menu(update: Update, context: CallbackContext):
@@ -121,11 +128,11 @@ async def handle_date_selection(update: Update, context: CallbackContext):
 
 async def handle_message_ovdp(update: Update, context: CallbackContext):
     """Обробка текстових повідомлень для ОВДП"""
-    if 'bond_step' not in context.user_data:
+    if 'bond_step' not in context.user_data and 'profit_step' not in context.user_data:
         return
     
     user_message = update.message.text
-    step = context.user_data['bond_step']
+    step = context.user_data.get('bond_step') or context.user_data.get('profit_step')
     
     try:
         if step == 'date_manual':
@@ -186,6 +193,69 @@ async def handle_message_ovdp(update: Update, context: CallbackContext):
                     f"💵 Сума: {total_amount:.2f} грн\n\n🏦 Виберіть платформу:",
                     reply_markup=InlineKeyboardMarkup(keyboard)
                 )
+            except ValueError:
+                await update.message.reply_text("❌ Будь ласка, введіть коректне число")
+        
+        elif step == 'enter_amount':
+            # Обробка введення суми для списання прибутку
+            try:
+                write_off_amount = float(user_message)
+                unrealized_profit = context.user_data.get('unrealized_profit', 0)
+                
+                if write_off_amount > unrealized_profit:
+                    await update.message.reply_text(
+                        f"❌ Сума перевищує нереалізований прибуток ({unrealized_profit:.0f} грн)\n\n"
+                        f"Введіть коректну суму:"
+                    )
+                    return
+                
+                if write_off_amount <= 0:
+                    await update.message.reply_text("❌ Сума має бути більше 0")
+                    return
+                
+                # Зберігаємо списання у базу даних
+                Session = context.bot_data.get('Session')
+                if not Session:
+                    await update.message.reply_text("❌ Помилка підключення до бази даних")
+                    return
+                
+                session = Session()
+                
+                # Створюємо новий запис про списання
+                profit_record = ProfitRecord(
+                    operation_date=datetime.now().strftime('%d.%m.%Y'),
+                    operation_type='списання',
+                    amount=0,  # Списання не має суми операції
+                    realized_profit=0,
+                    unrealized_profit=write_off_amount
+                )
+                
+                session.add(profit_record)
+                session.commit()
+                session.close()
+                
+                # Показуємо результат
+                remaining_profit = unrealized_profit - write_off_amount
+                
+                text = f"✅ *Оновлено!*\n\n"
+                text += f"📝 Списано: {write_off_amount:.0f} грн\n"
+                text += f"📋 Залишок: {remaining_profit:.0f} грн"
+                
+                keyboard = [
+                    [InlineKeyboardButton("💰 До меню прибутків", callback_data='ovdp_profit')],
+                    [InlineKeyboardButton("🔙 До ОВДП", callback_data='ovdp')]
+                ]
+                
+                await update.message.reply_text(
+                    text,
+                    reply_markup=InlineKeyboardMarkup(keyboard),
+                    parse_mode='Markdown'
+                )
+                
+                # Очищаємо контекст
+                context.user_data.pop('profit_step', None)
+                context.user_data.pop('unrealized_profit', None)
+                
             except ValueError:
                 await update.message.reply_text("❌ Будь ласка, введіть коректне число")
     
@@ -568,4 +638,70 @@ async def show_profit_menu(update: Update, context: CallbackContext):
         )
         
     except Exception as e:
+        await query.edit_message_text(f"❌ Помилка: {str(e)}")
+
+
+async def write_off_profit_menu(update: Update, context: CallbackContext):
+    """Меню списання прибутку - показує нереалізований прибуток"""
+    query = update.callback_query
+    await query.answer()
+    
+    try:
+        Session = context.bot_data.get('Session')
+        if not Session:
+            await query.edit_message_text("❌ Помилка підключення до бази даних")
+            return
+        
+        session = Session()
+        bonds = session.query(Bond).all()
+        session.close()
+        
+        # Розраховуємо реалізований прибуток
+        total_buy = 0
+        total_sell = 0
+        
+        for bond in bonds:
+            if bond.operation_type == 'купівля':
+                total_buy += bond.total_amount
+            else:
+                total_sell += bond.total_amount
+        
+        realized_profit = total_sell - total_buy
+        
+        # Отримуємо списаний прибуток
+        session = Session()
+        profit_records = session.query(ProfitRecord).filter(ProfitRecord.unrealized_profit > 0).all()
+        session.close()
+        
+        total_written_off = 0
+        for record in profit_records:
+            total_written_off += record.unrealized_profit
+        
+        # Нереалізований прибуток = те що можна списати
+        unrealized_profit = realized_profit - total_written_off
+        
+        # Зберігаємо в контекст для наступного кроку
+        context.user_data['unrealized_profit'] = unrealized_profit
+        
+        text = f"💰 *Списання прибутку*\n\n"
+        text += f"📋 Нереалізований прибуток: *{unrealized_profit:.0f} грн*\n\n"
+        
+        if unrealized_profit > 0:
+            keyboard = [
+                [InlineKeyboardButton("✍️ Списати", callback_data='confirm_write_off')],
+                [InlineKeyboardButton("🔙 Назад", callback_data='ovdp_profit')]
+            ]
+        else:
+            keyboard = [
+                [InlineKeyboardButton("🔙 Назад", callback_data='ovdp_profit')]
+            ]
+        
+        await query.edit_message_text(
+            text,
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode='Markdown'
+        )
+        
+    except Exception as e:
+        logger.error(f"Error in write_off_profit_menu: {e}")
         await query.edit_message_text(f"❌ Помилка: {str(e)}")
