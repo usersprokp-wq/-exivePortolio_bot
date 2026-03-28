@@ -224,6 +224,11 @@ async def button_handler(update: Update, context: CallbackContext):
         context.user_data['bond_step'] = 'total_amount_manual'
         await query.edit_message_text("📈 Введіть суму вручну:", parse_mode='Markdown')
 
+    elif query.data == 'ovdp_list':
+        await show_bonds_list(update, context)
+
+
+
 async def handle_message(update: Update, context: CallbackContext):
     # Додавання ОВДП
     if context.user_data.get('adding_bond'):
@@ -485,6 +490,41 @@ async def sync_bonds_to_sheets(update: Update, context: CallbackContext):
         
     except Exception as e:
         logger.error(f"Sync error: {e}")
+        await query.edit_message_text(f"❌ Помилка: {str(e)}")
+
+
+async def show_bonds_list(update: Update, context: CallbackContext):
+    """Показати список ОВДП"""
+    query = update.callback_query
+    await query.answer()
+    
+    try:
+        if not Session:
+            await query.edit_message_text("❌ Помилка підключення до бази даних")
+            return
+        
+        session = Session()
+        bonds = session.query(Bond).order_by(Bond.date.desc()).limit(20).all()
+        session.close()
+        
+        if not bonds:
+            await query.edit_message_text("📭 У вас ще немає записів ОВДП")
+            return
+        
+        text = "📋 *Останні 20 записів ОВДП:*\n\n"
+        for i, bond in enumerate(bonds, 1):
+            text += f"{i}. 📅 {bond.date} | {bond.operation_type}\n"
+            text += f"   🔢 {bond.bond_number} | {bond.quantity} шт | {bond.total_amount} грн\n"
+            text += f"   🏦 {bond.platform}\n\n"
+        
+        keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data='ovdp')]]
+        await query.edit_message_text(
+            text,
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode='Markdown'
+        )
+        
+    except Exception as e:
         await query.edit_message_text(f"❌ Помилка: {str(e)}")
 
 def main():
