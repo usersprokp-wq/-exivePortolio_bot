@@ -21,30 +21,30 @@ except ImportError:
     SELENIUM_AVAILABLE = False
     logger.warning("Selenium not available")
 
-
 def fetch_bond_price_icu(bond_number):
     """
     Парсить ціну облігації з uainvest.com.ua для ICU
-    Використовує робочий парсер
+    Повертає ціну або None
     """
     try:
-        import requests
-        from bs4 import BeautifulSoup
-        
-        isin = f"UA{bond_number}"
-        
         url = "https://uainvest.com.ua/ukrbonds"
-        headers = {"User-Agent": "Mozilla/5.0"}
-
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+        
         response = requests.get(url, headers=headers, timeout=15)
         soup = BeautifulSoup(response.text, 'html.parser')
-
+        
         table = soup.find('table')
+        if not table:
+            return None
+        
         rows = table.find_all('tr')
-
+        if not rows:
+            return None
+        
+        # Знаходимо індекси колонок
         headers_row = rows[0].find_all('th')
         isin_col = broker_col = price_col = None
-
+        
         for i, th in enumerate(headers_row):
             text = th.text.strip()
             if text == 'ISIN':
@@ -53,84 +53,28 @@ def fetch_bond_price_icu(bond_number):
                 broker_col = i
             if text == 'Ціна':
                 price_col = i
-
+        
+        if None in (isin_col, broker_col, price_col):
+            return None
+        
+        isin = f"UA{bond_number}"
+        
         for row in rows[1:]:
             cells = row.find_all('td')
             if len(cells) > max(isin_col, broker_col, price_col):
                 current_isin = cells[isin_col].text.strip()
                 if current_isin.startswith(isin):
-                    broker = cells[broker_col].text.strip()
+                    broker = cells[broker_col].text.strip().lower()
                     price = cells[price_col].text.strip()
-                    if broker.lower() == 'icu' and price != '-':
-                        logger.info(f"✅ Found ICU price: {price}")
+                    if broker == 'icu' and price != '-':
                         return float(price.replace(',', '.'))
         
-        logger.warning(f"ICU price not found for {isin}")
         return None
         
     except Exception as e:
-        logger.error(f"Error fetching bond price: {e}")
+        print(f"Error: {e}")
         return None
 
-
-def fetch_bond_price_icu(bond_number):
-    """
-    Парсить ціну облігації з uainvest.com.ua для ICU
-    Повертає ціну або None якщо не знайдено
-    """
-    try:
-        url = "https://uainvest.com.ua/ukrbonds"
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        }
-        
-        response = requests.get(url, headers=headers, timeout=10)
-        response.encoding = 'utf-8'
-        
-        soup = BeautifulSoup(response.content, 'html.parser')
-        
-        # Шукаємо таблицю з ОВДП
-        table = soup.find('table')
-        if not table:
-            logger.warning("Table not found on uainvest")
-            return None
-        
-        # Формуємо варіанти пошуку (з UA префіксом і без)
-        search_variants = [
-            f"UA{bond_number}",
-            str(bond_number)
-        ]
-        
-        # Проходимо по рядках таблиці
-        for row in table.find_all('tr'):
-            cells = row.find_all('td')
-            if len(cells) < 3:
-                continue
-            
-            # Перший стовпець - номер облігації
-            bond_num = cells[0].get_text(strip=True)
-            
-            # Перевіряємо чи це наша облігація (з UA або без)
-            if bond_num.strip() in search_variants:
-                # Шукаємо ICU ціну (зазвичай це один з стовпців)
-                # Структура може відрізнятися, тому перебираємо
-                for cell in cells[1:]:
-                    cell_text = cell.get_text(strip=True)
-                    # Намагаємося парсити число
-                    try:
-                        price = float(cell_text.replace(',', '.'))
-                        if price > 0 and price < 10000:  # Логічна перевірка ціни
-                            logger.info(f"Found price for {bond_number}: {price}")
-                            return price
-                    except ValueError:
-                        continue
-        
-        logger.warning(f"Bond {bond_number} not found on uainvest")
-        return None
-        
-    except Exception as e:
-        logger.error(f"Error fetching bond price: {e}")
-        return None
 
 
 def calculate_monthly_profit(bonds):
@@ -288,6 +232,8 @@ async def button_handler_ovdp(update: Update, context: CallbackContext):
         await query.edit_message_text("💰 Введіть суму для списання:", parse_mode='Markdown')
     elif query.data == 'pnl_portfolio':
         await show_pnl_portfolio(update, context)
+    elif query.data.startswith('icu_price_'):
+        await show_icu_price(update, context)
 
 
 async def show_ovdp_menu(update: Update, context: CallbackContext):
@@ -618,7 +564,8 @@ async def show_bonds_portfolio(update: Update, context: CallbackContext, platfor
             text += f"   📆 Термін: {data['maturity_date']}\n"
             text += f"   📦 Кількість: {data['total_quantity']} шт\n"
             text += f"   💰 Середня ціна: {avg_price:.2f} грн\n"
-            text += f"   💵 Сума: {data['total_amount']:.2f} грн\n\n"
+            text += f"   💵 Сума: {data['total_amount']:.2f} грн\n"
+            text += f"   🔘 [Взнати ICU ціну](callback:icu_price_{num})\n\n"
             total_invested += data['total_amount']
             total_quantity += data['total_quantity']
         
@@ -984,6 +931,25 @@ async def show_pnl_portfolio(update: Update, context: CallbackContext):
         keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data='ovdp_portfolio')]]
         await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
         
+async def show_icu_price(update: Update, context: CallbackContext):
+    """Показати ціну ICU для обраної облігації"""
+    query = update.callback_query
+    await query.answer()
+    
+    bond_number = query.data.replace('icu_price_', '')
+    
+    await query.edit_message_text(f"⏳ Завантажую ціну для {bond_number}...", parse_mode='Markdown')
+    
+    price = fetch_bond_price_icu(bond_number)
+    
+    if price:
+        text = f"📈 *ICU ціна для {bond_number}*\n\n💰 {price:.2f} грн"
+    else:
+        text = f"❌ *Не вдалося знайти ціну для {bond_number}*"
+    
+    keyboard = [[InlineKeyboardButton("🔙 Назад до портфеля", callback_data='ovdp_portfolio')]]
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+
     except Exception as e:
         logger.error(f"Error in show_pnl_portfolio: {e}")
         await query.edit_message_text(f"❌ Помилка: {str(e)}")
