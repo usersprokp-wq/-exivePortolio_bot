@@ -80,14 +80,14 @@ def main():
     # Встановлюємо post_init
     app.post_init = post_init
     
-    # Регіструємо обробники
+    # Регіструємо обробники (ВАЖЛИВО: порядок має значення!)
     app.add_handler(CommandHandler("start", start))
     
-    # Головне меню та спільні функції
-    app.add_handler(CallbackQueryHandler(button_handler_main))
+    # ОВДП обробники (перед спільними, бо більш специфічні)
+    app.add_handler(CallbackQueryHandler(button_handler_ovdp, pattern=r'^(ovdp|bond_|date_|platform_|portfolio_|write_off)'))
     
-    # ОВДП обробники
-    app.add_handler(CallbackQueryHandler(button_handler_ovdp))
+    # Головне меню та спільні функції (загальні кнопки)
+    app.add_handler(CallbackQueryHandler(button_handler_main, pattern=r'^(back_to_menu|analysis|sync|stocks|deposit|crypto|numismatics)'))
     
     # Обробка текстових повідомлень
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message_ovdp))

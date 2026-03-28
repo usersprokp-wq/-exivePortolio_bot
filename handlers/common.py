@@ -44,7 +44,48 @@ async def button_handler_main(update: Update, context: CallbackContext):
     
     context.user_data['current_message_id'] = query.message.message_id
     
-    if query.data == 'analysis':
+    if query.data == 'ovdp':
+        # Імпортуємо функцію з ovdp
+        from handlers.ovdp import show_ovdp_menu
+        await show_ovdp_menu(update, context)
+    
+    elif query.data == 'stocks':
+        text = "📊 *Акції*\n\nОберіть дію:"
+        keyboard = [
+            [InlineKeyboardButton("➕ Додати", callback_data='stocks_add')],
+            [InlineKeyboardButton("📋 Список", callback_data='stocks_list')],
+            [InlineKeyboardButton("🔙 Назад", callback_data='back_to_menu')]
+        ]
+        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+    
+    elif query.data == 'deposit':
+        text = "🏦 *Депозит*\n\nОберіть дію:"
+        keyboard = [
+            [InlineKeyboardButton("➕ Додати", callback_data='deposit_add')],
+            [InlineKeyboardButton("📋 Список", callback_data='deposit_list')],
+            [InlineKeyboardButton("🔙 Назад", callback_data='back_to_menu')]
+        ]
+        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+    
+    elif query.data == 'crypto':
+        text = "₿ *Криптовалюта*\n\nОберіть дію:"
+        keyboard = [
+            [InlineKeyboardButton("➕ Додати", callback_data='crypto_add')],
+            [InlineKeyboardButton("📋 Список", callback_data='crypto_list')],
+            [InlineKeyboardButton("🔙 Назад", callback_data='back_to_menu')]
+        ]
+        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+    
+    elif query.data == 'numismatics':
+        text = "🪙 *Нумізматика*\n\nОберіть дію:"
+        keyboard = [
+            [InlineKeyboardButton("➕ Додати", callback_data='numismatics_add')],
+            [InlineKeyboardButton("📋 Список", callback_data='numismatics_list')],
+            [InlineKeyboardButton("🔙 Назад", callback_data='back_to_menu')]
+        ]
+        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+    
+    elif query.data == 'analysis':
         text = "📊 *Аналіз портфеля*\n\nТут буде аналітика...\n\n(в розробці)"
         keyboard = [
             [InlineKeyboardButton("🔙 Назад", callback_data='back_to_menu')]

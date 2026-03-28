@@ -22,11 +22,6 @@ def set_session(session):
 async def button_handler_ovdp(update: Update, context: CallbackContext):
     """Обробник кнопок для ОВДП"""
     query = update.callback_query
-    
-    # Якщо це не ОВДП - пропускаємо
-    if not query.data.startswith('ovdp') and not query.data.startswith('bond_') and not query.data.startswith('date_') and not query.data.startswith('platform_'):
-        return
-    
     await query.answer()
     
     if query.data == 'ovdp':
