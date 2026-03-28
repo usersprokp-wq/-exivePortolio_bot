@@ -84,7 +84,8 @@ class GoogleSheetsManager:
             if not portfolio_data:
                 return
             
-            headers = ['Номер ОВДП', 'Термін до', 'Кількість', 'Середня ціна', 'Сума (загальна)']
+            headers = ['Номер ОВДП', 'Термін до', 'Кількість', 'Середня ціна', 'Сума']
+            worksheet.append_row(headers)
             
             for item in portfolio_data:
                 row = [
