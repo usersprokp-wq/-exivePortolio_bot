@@ -31,6 +31,7 @@ def fetch_bond_price_icu(bond_number):
         logger.warning("Selenium not available")
         return None
     
+    driver = None
     try:
         # Налаштування Chrome для headless режиму
         chrome_options = Options()
@@ -43,64 +44,118 @@ def fetch_bond_price_icu(bond_number):
         
         driver = webdriver.Chrome(options=chrome_options)
         
+        url = "https://uainvest.com.ua/ukrbonds"
+        logger.info(f"Fetching price for bond {bond_number}")
+        
+        driver.get(url)
+        time.sleep(3)
+        
+        # Формуємо ID облігації як на сайті
+        bond_id = f"UA{bond_number}"
+        
+        # Шукаємо рядок облігації по ISIN
         try:
-            url = "https://uainvest.com.ua/ukrbonds"
-            logger.info(f"Fetching price for bond {bond_number}")
+            # XPath для пошуку облігації по ISIN коду
+            bond_xpath = f"//td[contains(text(), '{bond_id}')]"
+            bond_element = WebDriverWait(driver, 10).until(
+                EC.presence_of_element_located((By.XPATH, bond_xpath))
+            )
+            logger.info(f"Found bond {bond_id}")
             
-            driver.get(url)
+            # Клікаємо на облігацію щоб розкрити список брокерів
+            bond_row = bond_element.find_element(By.XPATH, "ancestor::tr")
+            driver.execute_script("arguments[0].click();", bond_row)
             time.sleep(2)
             
-            # Шукаємо облігацію по номеру
-            bond_search = f"UA{bond_number}"
-            xpath = f"//td[contains(text(), '{bond_search}')]"
+            # Шукаємо всі рядки після облігації (рядки брокерів)
+            # Вони мають назву брокера в одному стовпці і ціну в іншому
+            tbody = bond_row.find_element(By.XPATH, "ancestor::tbody")
+            all_rows = tbody.find_elements(By.TAG_NAME, "tr")
             
-            try:
-                bond_cell = WebDriverWait(driver, 10).until(
-                    EC.presence_of_element_located((By.XPATH, xpath))
-                )
-                logger.info(f"Found bond {bond_search}")
-                
-                # Клікаємо на облігацію щоб розкрити брокерів
-                bond_row = bond_cell.find_element(By.XPATH, "ancestor::tr")
-                bond_row.click()
-                time.sleep(1)
-                
-                # Шукаємо ICU у розкритому списку
-                # ICU зазвичай має іконку з текстом "icu"
-                icu_xpath = f"//td[contains(text(), '{bond_search}')]/../following-sibling::tr//td[contains(text(), 'icu') or contains(text(), 'ICU')]"
-                
+            bond_idx = None
+            for i, row in enumerate(all_rows):
                 try:
-                    icu_cells = driver.find_elements(By.XPATH, icu_xpath)
-                    
-                    # Шукаємо ціну в сусідній клітинці
-                    if icu_cells:
-                        icu_row = icu_cells[0].find_element(By.XPATH, "ancestor::tr")
-                        cells = icu_row.find_elements(By.TAG_NAME, "td")
-                        
-                        # Ціна зазвичай у 3-му стовпці
-                        if len(cells) > 2:
-                            for cell in cells[2:]:
-                                price_text = cell.text.strip()
-                                try:
-                                    price = float(price_text.replace(',', '.'))
-                                    if 0 < price < 10000:
-                                        logger.info(f"Found ICU price: {price}")
-                                        return price
-                                except:
-                                    pass
+                    if bond_element in row.find_elements(By.TAG_NAME, "td"):
+                        bond_idx = i
+                        break
                 except:
-                    logger.debug("ICU row not found")
-                    
-            except:
-                logger.warning(f"Bond {bond_number} not found on page")
+                    pass
+            
+            if bond_idx is None:
+                logger.warning("Could not find bond index")
                 return None
             
-        finally:
-            driver.quit()
+            # Проходимо по рядках брокерів після облігації
+            for i in range(bond_idx + 1, len(all_rows)):
+                try:
+                    row = all_rows[i]
+                    cells = row.find_elements(By.TAG_NAME, "td")
+                    
+                    # Якщо рядок пустий або це нова облігація - зупиняємось
+                    if len(cells) < 2:
+                        break
+                    
+                    # Перевіряємо чи це рядок брокера
+                    row_text = row.text.lower()
+                    
+                    if 'icu' in row_text:
+                        logger.info("Found ICU row, extracting price...")
+                        
+                        # Шукаємо клітинку з class="bank-logo-container"
+                        # Ціна знаходиться в <td> всередині цього контейнера
+                        try:
+                            bank_container = row.find_element(By.CLASS_NAME, "bank-logo-container")
+                            # Шукаємо всі <td> всередину цього контейнера
+                            price_cells = bank_container.find_elements(By.TAG_NAME, "td")
+                            
+                            # Ціна зазвичай у останній клітинці
+                            if price_cells:
+                                for cell in reversed(price_cells):
+                                    price_text = cell.text.strip()
+                                    if price_text and price_text != '-':
+                                        try:
+                                            price = float(price_text.replace(',', '.'))
+                                            if 500 < price < 5000:
+                                                logger.info(f"Found ICU price: {price}")
+                                                return price
+                                        except ValueError:
+                                            continue
+                        except:
+                            # Якщо не знайшли bank-logo-container, шукаємо в усіх клітинках
+                            for cell in cells:
+                                price_text = cell.text.strip()
+                                if price_text and price_text != '-':
+                                    try:
+                                        price = float(price_text.replace(',', '.'))
+                                        if 500 < price < 5000:
+                                            logger.info(f"Found ICU price (fallback): {price}")
+                                            return price
+                                    except ValueError:
+                                        continue
+                        
+                        # Якщо ICU знайдено але ціна не знайдена
+                        break
+                
+                except Exception as e:
+                    logger.debug(f"Error processing broker row: {e}")
+                    continue
+            
+            logger.warning(f"ICU price not found for {bond_number}")
+            return None
+            
+        except Exception as e:
+            logger.error(f"Error finding bond {bond_id}: {e}")
+            return None
             
     except Exception as e:
         logger.error(f"Error fetching bond price: {e}")
         return None
+    finally:
+        if driver:
+            try:
+                driver.quit()
+            except:
+                pass
 
 
 def fetch_bond_price_icu(bond_number):
