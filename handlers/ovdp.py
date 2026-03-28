@@ -101,37 +101,27 @@ def fetch_bond_price_icu(bond_number):
                     if 'icu' in row_text:
                         logger.info("Found ICU row, extracting price...")
                         
-                        # Шукаємо клітинку з class="bank-logo-container"
-                        # Ціна знаходиться в <td> всередині цього контейнера
+                        # Ціна знаходиться в НАСТУПНІЙ <td> після bank-logo-container
                         try:
                             bank_container = row.find_element(By.CLASS_NAME, "bank-logo-container")
-                            # Шукаємо всі <td> всередину цього контейнера
-                            price_cells = bank_container.find_elements(By.TAG_NAME, "td")
+                            # Батьківська TD цього контейнера
+                            icu_td = bank_container.find_element(By.XPATH, "ancestor::td")
+                            # Отримуємо наступну TD (там ціна)
+                            next_td = icu_td.find_element(By.XPATH, "following-sibling::td[1]")
                             
-                            # Ціна зазвичай у останній клітинці
-                            if price_cells:
-                                for cell in reversed(price_cells):
-                                    price_text = cell.text.strip()
-                                    if price_text and price_text != '-':
-                                        try:
-                                            price = float(price_text.replace(',', '.'))
-                                            if 500 < price < 5000:
-                                                logger.info(f"Found ICU price: {price}")
-                                                return price
-                                        except ValueError:
-                                            continue
-                        except:
-                            # Якщо не знайшли bank-logo-container, шукаємо в усіх клітинках
-                            for cell in cells:
-                                price_text = cell.text.strip()
-                                if price_text and price_text != '-':
-                                    try:
-                                        price = float(price_text.replace(',', '.'))
-                                        if 500 < price < 5000:
-                                            logger.info(f"Found ICU price (fallback): {price}")
-                                            return price
-                                    except ValueError:
-                                        continue
+                            price_text = next_td.text.strip()
+                            logger.info(f"Extracted price text: {price_text}")
+                            
+                            if price_text and price_text != '-':
+                                try:
+                                    price = float(price_text.replace(',', '.'))
+                                    if 0.1 < price < 10000:
+                                        logger.info(f"Found ICU price: {price}")
+                                        return price
+                                except ValueError as e:
+                                    logger.warning(f"Could not parse price: {price_text}")
+                        except Exception as e:
+                            logger.error(f"Error extracting price: {e}")
                         
                         # Якщо ICU знайдено але ціна не знайдена
                         break
