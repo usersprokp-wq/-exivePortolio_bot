@@ -333,6 +333,7 @@ async def handle_message(update: Update, context: CallbackContext):
             }
             session.close()
             
+            keyboard = [[InlineKeyboardButton("🔙 Назад до ОВДП", callback_data='ovdp')]]
             await update.message.reply_text(
                 f"✅ *ОВДП додано!*\n\n"
                 f"📅 Дата: {bond_data['date']}\n"
@@ -343,6 +344,7 @@ async def handle_message(update: Update, context: CallbackContext):
                 f"📦 Кількість: {bond_data['quantity']}\n"
                 f"💵 Сума: {bond_data['total_amount']} грн\n"
                 f"🏦 Платформа: {bond_data['platform']}",
+                reply_markup=InlineKeyboardMarkup(keyboard),
                 parse_mode='Markdown'
             )
     
