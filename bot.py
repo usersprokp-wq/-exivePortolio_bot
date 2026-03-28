@@ -227,6 +227,8 @@ async def button_handler(update: Update, context: CallbackContext):
     elif query.data == 'ovdp_list':
         await show_bonds_list(update, context)
 
+    elif query.data == 'ovdp_portfolio':
+        await show_bonds_portfolio(update, context)
 
 
 async def handle_message(update: Update, context: CallbackContext):
@@ -509,6 +511,72 @@ async def show_bonds_list(update: Update, context: CallbackContext):
             text += f"{i}. 📅 {bond.date} | {bond.operation_type}\n"
             text += f"   🔢 {bond.bond_number} | {bond.quantity} шт | {bond.total_amount} грн\n"
             text += f"   🏦 {bond.platform}\n\n"
+        
+        keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data='ovdp')]]
+        await query.edit_message_text(
+            text,
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode='Markdown'
+        )
+        
+    except Exception as e:
+        await query.edit_message_text(f"❌ Помилка: {str(e)}")
+
+async def show_bonds_portfolio(update: Update, context: CallbackContext):
+    """Показати портфель ОВДП"""
+    query = update.callback_query
+    await query.answer()
+    
+    try:
+        if not Session:
+            await query.edit_message_text("❌ Помилка підключення до бази даних")
+            return
+        
+        session = Session()
+        bonds = session.query(Bond).all()
+        session.close()
+        
+        if not bonds:
+            await query.edit_message_text("📭 У вас ще немає записів ОВДП")
+            return
+        
+        # Розраховуємо портфель (тільки купівлі)
+        portfolio = {}
+        for bond in bonds:
+            if bond.operation_type == 'купівля':
+                num = bond.bond_number
+                if num not in portfolio:
+                    portfolio[num] = {
+                        'bond_number': num,
+                        'maturity_date': bond.maturity_date,
+                        'total_quantity': 0,
+                        'total_amount': 0
+                    }
+                portfolio[num]['total_quantity'] += bond.quantity
+                portfolio[num]['total_amount'] += bond.total_amount
+        
+        if not portfolio:
+            await query.edit_message_text("📭 Немає куплених ОВДП")
+            return
+        
+        # Формуємо текст
+        text = "💼 *Портфель ОВДП*\n\n"
+        total_invested = 0
+        total_quantity = 0
+        
+        for num, data in portfolio.items():
+            avg_price = data['total_amount'] / data['total_quantity'] if data['total_quantity'] > 0 else 0
+            text += f"🔢 *{num}*\n"
+            text += f"   📆 Термін: {data['maturity_date']}\n"
+            text += f"   📦 Кількість: {data['total_quantity']} шт\n"
+            text += f"   💰 Середня ціна: {avg_price:.2f} грн\n"
+            text += f"   💵 Сума: {data['total_amount']:.2f} грн\n\n"
+            total_invested += data['total_amount']
+            total_quantity += data['total_quantity']
+        
+        text += f"━━━━━━━━━━━━━━━━━━━━\n"
+        text += f"📊 *Всього інвестовано:* {total_invested:.2f} грн\n"
+        text += f"📊 *Всього облігацій:* {total_quantity} шт"
         
         keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data='ovdp')]]
         await query.edit_message_text(
