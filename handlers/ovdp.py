@@ -519,7 +519,12 @@ async def show_bonds_stats(update: Update, context: CallbackContext):
                 monthly_profit[month]['sell'] += amount
         
         current_portfolio = total_buy - total_sell
-        realized_profit = total_sell - total_buy
+        
+        # Якщо нема продажів - прибуток = 0
+        if total_sell == 0:
+            realized_profit = 0
+        else:
+            realized_profit = total_sell - total_buy
         
         # Формуємо текст
         text = "📊 *Статистика ОВДП*\n\n"
@@ -539,7 +544,11 @@ async def show_bonds_stats(update: Update, context: CallbackContext):
         for month in sorted(monthly_profit.keys()):
             buy = monthly_profit[month]['buy']
             sell = monthly_profit[month]['sell']
-            profit = sell - buy
+            # Якщо нема продажів у цьому місяці - прибуток = 0
+            if sell == 0:
+                profit = 0
+            else:
+                profit = sell - buy
             text += f"   {month}: Куп. {buy:.0f} грн | Прод. {sell:.0f} грн | Прибуток {profit:.0f} грн\n"
         text += "\n"
         
@@ -608,18 +617,25 @@ async def show_profit_menu(update: Update, context: CallbackContext):
             else:
                 total_sell += bond.total_amount
         
-        realized_profit = total_sell - total_buy
+        # Якщо нема продажів - прибуток = 0
+        if total_sell == 0:
+            realized_profit = 0
+        else:
+            realized_profit = total_sell - total_buy
         
         # Отримуємо списаний прибуток
         session = Session()
-        profit_records = session.query(ProfitRecord).all()
+        profit_records = session.query(ProfitRecord).filter(ProfitRecord.unrealized_profit > 0).all()
         session.close()
         
         total_written_off = 0
         for record in profit_records:
             total_written_off += record.unrealized_profit
         
+        # Нереалізований прибуток = те що можна списати (доки не продано)
         unrealized_profit = realized_profit - total_written_off
+        if unrealized_profit < 0:
+            unrealized_profit = 0
         
         text = f"💰 *Управління прибутками*\n\n"
         text += f"📈 Реалізований прибуток: {realized_profit:.0f} грн\n"
@@ -668,6 +684,10 @@ async def write_off_profit_menu(update: Update, context: CallbackContext):
         
         realized_profit = total_sell - total_buy
         
+        # Якщо нема продажів - прибуток = 0
+        if total_sell == 0:
+            realized_profit = 0
+        
         # Отримуємо списаний прибуток
         session = Session()
         profit_records = session.query(ProfitRecord).filter(ProfitRecord.unrealized_profit > 0).all()
@@ -679,6 +699,8 @@ async def write_off_profit_menu(update: Update, context: CallbackContext):
         
         # Нереалізований прибуток = те що можна списати
         unrealized_profit = realized_profit - total_written_off
+        if unrealized_profit < 0:
+            unrealized_profit = 0
         
         # Зберігаємо в контекст для наступного кроку
         context.user_data['unrealized_profit'] = unrealized_profit
