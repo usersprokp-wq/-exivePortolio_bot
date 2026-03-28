@@ -199,7 +199,7 @@ async def button_handler(update: Update, context: CallbackContext):
         )
 
     elif query.data == 'ovdp_stats':
-        await query.edit_message_text("📈 *ОВДП - Статистика*\n\nТут буде статистика...\n\n(в розробці)", parse_mode='Markdown')
+        await show_bonds_stats(update, context)
     
     elif query.data == 'bond_buy':
         context.user_data['bond_operation_type'] = 'купівля'
@@ -680,6 +680,114 @@ async def show_bonds_portfolio(update: Update, context: CallbackContext, platfor
                  InlineKeyboardButton("🏦 SENSBANK", callback_data='portfolio_sensbank')],
                 [InlineKeyboardButton("🔙 Назад", callback_data='ovdp')]
             ]
+        await query.edit_message_text(
+            text,
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode='Markdown'
+        )
+        
+    except Exception as e:
+        await query.edit_message_text(f"❌ Помилка: {str(e)}")
+
+async def show_bonds_stats(update: Update, context: CallbackContext):
+    """Показати статистику ОВДП"""
+    query = update.callback_query
+    await query.answer()
+    
+    try:
+        if not Session:
+            await query.edit_message_text("❌ Помилка підключення до бази даних")
+            return
+        
+        session = Session()
+        bonds = session.query(Bond).all()
+        session.close()
+        
+        if not bonds:
+            await query.edit_message_text("📭 Немає даних для статистики")
+            return
+        
+        # Розрахунки
+        total_buy = 0
+        total_sell = 0
+        total_quantity = 0
+        platform_stats = {'ICU': {'buy': 0, 'sell': 0}, 'SENSBANK': {'buy': 0, 'sell': 0}, 'Інші': {'buy': 0, 'sell': 0}}
+        monthly_stats = {}
+        total_amount = 0
+        operation_count = 0
+        
+        for bond in bonds:
+            amount = bond.total_amount
+            total_amount += amount
+            operation_count += 1
+            
+            if bond.operation_type == 'купівля':
+                total_buy += amount
+                total_quantity += bond.quantity
+            else:
+                total_sell += amount
+            
+            # Статистика по платформах
+            platform = bond.platform.upper()
+            if platform == 'ICU':
+                if bond.operation_type == 'купівля':
+                    platform_stats['ICU']['buy'] += amount
+                else:
+                    platform_stats['ICU']['sell'] += amount
+            elif platform == 'SENSBANK':
+                if bond.operation_type == 'купівля':
+                    platform_stats['SENSBANK']['buy'] += amount
+                else:
+                    platform_stats['SENSBANK']['sell'] += amount
+            else:
+                if bond.operation_type == 'купівля':
+                    platform_stats['Інші']['buy'] += amount
+                else:
+                    platform_stats['Інші']['sell'] += amount
+            
+            # Статистика по місяцях
+            month = bond.date[:7] if len(bond.date) >= 7 else bond.date
+            if month not in monthly_stats:
+                monthly_stats[month] = {'buy': 0, 'sell': 0}
+            if bond.operation_type == 'купівля':
+                monthly_stats[month]['buy'] += amount
+            else:
+                monthly_stats[month]['sell'] += amount
+        
+        current_portfolio = total_buy - total_sell
+        avg_operation = total_amount / operation_count if operation_count > 0 else 0
+        
+        # Формуємо текст
+        text = "📊 *Статистика ОВДП*\n\n"
+        
+        text += "💰 *Загальна вартість:*\n"
+        text += f"   Всього куплено: {total_buy:.0f} грн\n"
+        text += f"   Всього продано: {total_sell:.0f} грн\n"
+        text += f"   Поточна вартість: {current_portfolio:.0f} грн\n"
+        text += f"   Кількість ОВДП: {total_quantity} шт\n\n"
+        
+        text += "🏦 *Інвестування по платформах:*\n"
+        text += f"   СЕНС: {platform_stats['Інші']['buy']:.0f} грн\n"
+        text += f"   ICU: {platform_stats['ICU']['buy']:.0f} грн\n"
+        text += f"   SENSBANK: {platform_stats['SENSBANK']['buy']:.0f} грн\n\n"
+        
+        text += "📈 *Загальний прибуток:*\n"
+        profit = total_sell - total_buy
+        text += f"   {profit:.0f} грн\n\n"
+        
+        text += "📊 *Динаміка по місяцях:*\n"
+        for month in sorted(monthly_stats.keys()):
+            buy = monthly_stats[month]['buy']
+            sell = monthly_stats[month]['sell']
+            text += f"   {month}: купівля {buy:.0f} грн | продаж {sell:.0f} грн\n"
+        text += "\n"
+        
+        text += f"📊 *Середня сума операції:* {avg_operation:.0f} грн\n\n"
+        
+        text += "💸 *Найближчі виплати:*\n"
+        text += "   (в розробці)\n"
+        
+        keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data='ovdp')]]
         await query.edit_message_text(
             text,
             reply_markup=InlineKeyboardMarkup(keyboard),
