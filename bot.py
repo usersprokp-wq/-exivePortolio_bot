@@ -407,7 +407,7 @@ async def sync_bonds_to_sheets(update: Update, context: CallbackContext):
     
     try:
         if not Session or not sheets_manager:
-            await query.edit_message_text("❌ Помилка підключення до бази даних або Google Sheets")
+            await query.edit_message_text("❌ Помилка підключення")
             return
         
         session = Session()
@@ -418,7 +418,7 @@ async def sync_bonds_to_sheets(update: Update, context: CallbackContext):
             session.close()
             return
         
-        # Перетворюємо в список словників
+        # Експортуємо записи
         bonds_data = []
         for bond in bonds:
             bonds_data.append({
@@ -432,21 +432,51 @@ async def sync_bonds_to_sheets(update: Update, context: CallbackContext):
                 'platform': bond.platform
             })
         
-        session.close()
-        
-        # Експортуємо в Google Sheets
         sheets_manager.export_bonds_to_sheets(bonds_data)
+        
+        # Розраховуємо портфель (сумуємо по номерах ОВДП)
+        portfolio = {}
+        for bond in bonds:
+            if bond.operation_type == 'купівля':
+                num = bond.bond_number
+                if num not in portfolio:
+                    portfolio[num] = {
+                        'bond_number': num,
+                        'maturity_date': bond.maturity_date,
+                        'total_quantity': 0,
+                        'total_amount': 0,
+                        'total_price': 0
+                    }
+                portfolio[num]['total_quantity'] += bond.quantity
+                portfolio[num]['total_amount'] += bond.total_amount
+                portfolio[num]['total_price'] += bond.price_per_unit * bond.quantity
+        
+        # Розраховуємо середню ціну
+        portfolio_data = []
+        for num, data in portfolio.items():
+            portfolio_data.append({
+                'bond_number': num,
+                'maturity_date': data['maturity_date'],
+                'total_quantity': data['total_quantity'],
+                'total_amount': data['total_amount'],
+                'avg_price': round(data['total_amount'] / data['total_quantity'], 2) if data['total_quantity'] > 0 else 0
+            })
+        
+        sheets_manager.export_bonds_portfolio(portfolio_data)
+        session.close()
         
         await query.edit_message_text(
             f"✅ *Синхронізація завершена!*\n\n"
-            f"📊 Експортовано {len(bonds_data)} записів ОВДП\n"
-            f"📄 Таблиця: {os.getenv('SPREADSHEET_NAME', 'Telegram Bot Data')}",
+            f"📊 Експортовано {len(bonds_data)} записів\n"
+            f"📁 Вкладка: ОВДП-Записи\n\n"
+            f"💼 Портфель: {len(portfolio_data)} позицій\n"
+            f"📁 Вкладка: ОВДП-Портфель",
             parse_mode='Markdown'
         )
         
     except Exception as e:
         logger.error(f"Sync error: {e}")
-        await query.edit_message_text(f"❌ Помилка синхронізації: {str(e)}")
+        await query.edit_message_text(f"❌ Помилка: {str(e)}")
 
 def main():
     app = Application.builder().token(BOT_TOKEN).build()
