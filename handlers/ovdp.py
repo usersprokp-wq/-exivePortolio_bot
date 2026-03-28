@@ -904,8 +904,8 @@ async def show_pnl_portfolio(update: Update, context: CallbackContext):
             text += f"   📦 Кількість: {quantity} шт\n"
             text += f"   💰 Ціна покупки: {avg_price:.2f} грн/шт\n"
             text += f"   📈 ICU ціна: {current_price:.2f} грн/шт{price_status}\n"
-            text += f"   💵 PnL: {pnl:+.0f} грн ({pnl_percent:+.1f}%)\n"
-            text += f"   💵 Поточна вартість: {current_value:.0f} грн\n\n"
+            text += f"   💵 Поточна вартість: {current_value:.0f} грн\n"
+            text += f"   💵 PnL: {pnl:+.0f} грн ({pnl_percent:+.1f}%)\n\n"
             
             total_buy_value += buy_value
             total_current_value += current_value
