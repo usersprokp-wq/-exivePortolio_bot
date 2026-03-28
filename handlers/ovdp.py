@@ -106,7 +106,7 @@ def calculate_monthly_profit(bonds):
     # Проходимо по кожній облігації та її продажам
     for bond_num, stats in bond_stats.items():
         for sale in stats['sales']:
-            month_year = get_month_year(sale['sell_date'])
+            month_year = get_month_year(sale['date'])
             
             if month_year not in monthly_profit:
                 monthly_profit[month_year] = 0
@@ -794,11 +794,9 @@ async def show_profit_menu(update: Update, context: CallbackContext):
             unrealized_profit = 0
         
         text = f"💰 *Управління прибутками*\n\n"
-        text += f"📈 Реалізований прибуток: {total_profit:.0f} грн\n"
-        text += f"📋 Не списаний прибуток: {unrealized_profit:.0f} грн\n\n"
+        text += f"📈 Реалізований прибуток: {total_profit:.0f} грн\n\n"
         
         keyboard = [
-            [InlineKeyboardButton("✍️ Списати прибуток", callback_data='write_off_profit')],
             [InlineKeyboardButton("🔙 Назад", callback_data='ovdp')]
         ]
         
