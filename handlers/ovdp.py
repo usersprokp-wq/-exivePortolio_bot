@@ -545,19 +545,25 @@ async def show_bonds_stats(update: Update, context: CallbackContext):
         
         for bond in bonds:
             amount = bond.total_amount
+            
+            # Додаємо облігацію в портфель
+            if bond.bond_number not in portfolio_by_bond:
+                portfolio_by_bond[bond.bond_number] = {
+                    'maturity_date': bond.maturity_date,
+                    'quantity': 0,
+                    'total_amount': 0
+                }
+            
             if bond.operation_type == 'купівля':
                 total_buy += amount
                 total_quantity += bond.quantity
-                if bond.bond_number not in portfolio_by_bond:
-                    portfolio_by_bond[bond.bond_number] = {
-                        'maturity_date': bond.maturity_date,
-                        'quantity': 0,
-                        'total_amount': 0
-                    }
                 portfolio_by_bond[bond.bond_number]['quantity'] += bond.quantity
                 portfolio_by_bond[bond.bond_number]['total_amount'] += amount
             else:
                 total_sell += amount
+                # ДЛЯ ПРОДАЖІВ - ВИЧИТАЄМО З ПОРТФЕЛЯ!
+                portfolio_by_bond[bond.bond_number]['quantity'] -= bond.quantity
+                portfolio_by_bond[bond.bond_number]['total_amount'] -= amount
             
             month = bond.date[:7] if len(bond.date) >= 7 else bond.date
             if month not in monthly_profit:
