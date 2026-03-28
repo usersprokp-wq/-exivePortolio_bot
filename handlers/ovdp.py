@@ -152,14 +152,20 @@ def calculate_profit_by_price(bonds):
     })
     
     def parse_date(date_str):
-        """Парсує дату з формату ДД.ММ.РРРР"""
+        """Парсує дату з формату ДД.ММ.РРРР або ДД.ММ.РРРРр."""
         try:
-            return datetime.strptime(str(date_str).strip(), '%d.%m.%Y')
+            # Видаляємо "р." якщо є
+            cleaned = str(date_str).strip().replace('р.', '').replace('р', '').strip()
+            return datetime.strptime(cleaned, '%d.%m.%Y')
         except:
             return datetime.max
     
     # Сортуємо по даті для правильного FIFO
-    sorted_bonds = sorted(bonds, key=lambda x: parse_date(x.date))
+    # Вторинне сортування: купівля (0) перед продажем (1) на одну дату
+    sorted_bonds = sorted(bonds, key=lambda x: (
+        parse_date(x.date),
+        0 if x.operation_type == 'купівля' else 1
+    ))
     
     for bond in sorted_bonds:
         bond_num = bond.bond_number
