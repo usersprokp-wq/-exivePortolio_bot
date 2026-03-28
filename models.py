@@ -19,6 +19,7 @@ class Bond(Base):
     """Модель для ОВДП (облігацій)"""
     __tablename__ = 'bonds'
     id = Column(Integer, primary_key=True)
+    row_order = Column(Integer, default=0)  # Порядок рядка з Excel для FIFO
     date = Column(String(50))
     operation_type = Column(String(20))  # 'купівля' або 'продаж'
     bond_number = Column(String(50))

@@ -145,9 +145,10 @@ def calculate_profit_by_price(bonds):
         except:
             return datetime.max
     
-    # Сортуємо по даті для правильного FIFO
-    # Вторинне сортування: купівля (0) перед продажем (1) на одну дату
+    # Сортуємо по row_order (порядку з Excel) для правильного FIFO
+    # Якщо row_order не встановлений - сортуємо по даті
     sorted_bonds = sorted(bonds, key=lambda x: (
+        x.row_order if x.row_order and x.row_order > 0 else float('inf'),
         parse_date(x.date),
         0 if x.operation_type == 'купівля' else 1
     ))
@@ -895,7 +896,8 @@ async def sync_bonds_from_sheets(update: Update, context: CallbackContext):
         excel_keys = set()
         excel_data_by_key = {}
         
-        for bond_data in excel_bonds_data:
+        for row_idx, bond_data in enumerate(excel_bonds_data):
+            bond_data['row_order'] = row_idx + 1  # Зберігаємо порядок рядка (починаючи з 1)
             key = create_bond_key(bond_data)
             excel_keys.add(key)
             excel_data_by_key[key] = bond_data
@@ -941,6 +943,7 @@ async def sync_bonds_from_sheets(update: Update, context: CallbackContext):
                 # Додаємо новий запис
                 try:
                     new_bond = Bond(
+                        row_order=excel_bond.get('row_order', 0),
                         date=excel_bond.get('date', ''),
                         operation_type=excel_bond.get('operation_type', ''),
                         bond_number=excel_bond.get('bond_number', ''),
