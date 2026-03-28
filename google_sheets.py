@@ -131,3 +131,45 @@ class GoogleSheetsManager:
         except Exception as e:
             logger.error(f"Error exporting profit to sheets: {e}")
             raise
+    
+    def import_bonds_from_sheets(self):
+        """Імпортує дані ОВДП з Google Sheets (вкладка ОВДП-Записи)"""
+        try:
+            worksheet = self.get_or_create_worksheet("ОВДП-Записи")
+            all_rows = worksheet.get_all_values()
+            
+            if not all_rows or len(all_rows) < 2:
+                logger.warning("No data in ОВДП-Записи sheet")
+                return []
+            
+            # Перший рядок - заголовки
+            headers = all_rows[0]
+            bonds_data = []
+            
+            # Обробляємо дані з рядків 1+ (пропускаємо заголовок)
+            for row in all_rows[1:]:
+                if not any(row):  # Пропускаємо порожні рядки
+                    continue
+                
+                # Мапимо рядок на словник за заголовками
+                try:
+                    bond_dict = {
+                        'date': row[0] if len(row) > 0 else '',
+                        'operation_type': row[1] if len(row) > 1 else '',
+                        'bond_number': row[2] if len(row) > 2 else '',
+                        'maturity_date': row[3] if len(row) > 3 else '',
+                        'price_per_unit': float(row[4]) if len(row) > 4 and row[4] else 0,
+                        'quantity': int(row[5]) if len(row) > 5 and row[5] else 0,
+                        'total_amount': float(row[6]) if len(row) > 6 and row[6] else 0,
+                        'platform': row[7] if len(row) > 7 else ''
+                    }
+                    bonds_data.append(bond_dict)
+                except (ValueError, IndexError) as e:
+                    logger.warning(f"Error parsing row: {e}")
+                    continue
+            
+            logger.info(f"Imported {len(bonds_data)} bonds from worksheet 'ОВДП-Записи'")
+            return bonds_data
+        except Exception as e:
+            logger.error(f"Error importing from sheets: {e}")
+            raise

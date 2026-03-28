@@ -96,7 +96,8 @@ async def button_handler_main(update: Update, context: CallbackContext):
         await sync_bonds_to_sheets(update, context)
     
     elif query.data == 'sync_sheets_to_db':
-        await query.edit_message_text("🔄 Синхронізація Excel → БД\n\n(в розробці)", parse_mode='Markdown')
+        from handlers.ovdp import sync_bonds_from_sheets
+        await sync_bonds_from_sheets(update, context)
     
     elif query.data == 'back_to_menu':
         await start(update, context)
