@@ -21,6 +21,7 @@ except ImportError:
     SELENIUM_AVAILABLE = False
     logger.warning("Selenium not available")
 
+
 def fetch_bond_price_icu(bond_number):
     """
     Парсить ціну облігації з uainvest.com.ua для ICU
@@ -74,7 +75,6 @@ def fetch_bond_price_icu(bond_number):
     except Exception as e:
         print(f"Error: {e}")
         return None
-
 
 
 def calculate_monthly_profit(bonds):
@@ -785,171 +785,3 @@ async def write_off_profit_menu(update: Update, context: CallbackContext):
     
     try:
         Session = context.bot_data.get('Session')
-        if not Session:
-            await query.edit_message_text("❌ Помилка підключення до бази даних")
-            return
-        
-        session = Session()
-        bonds = session.query(Bond).all()
-        session.close()
-        
-        if not bonds:
-            await query.edit_message_text("📭 Немає даних про ОВДП")
-            return
-        
-        # Розраховуємо прибуток по ціні
-        bond_stats, total_profit = calculate_profit_by_price(bonds)
-        
-        session = Session()
-        profit_records = session.query(ProfitRecord).filter(ProfitRecord.unrealized_profit > 0).all()
-        session.close()
-        
-        total_written_off = 0
-        for record in profit_records:
-            total_written_off += record.unrealized_profit
-        
-        unrealized_profit = total_profit - total_written_off
-        if unrealized_profit < 0:
-            unrealized_profit = 0
-        
-        context.user_data['unrealized_profit'] = unrealized_profit
-        
-        text = f"💰 *Списання прибутку*\n\n"
-        text += f"📋 Не списаний прибуток: *{unrealized_profit:.0f} грн*\n\n"
-        
-        if unrealized_profit > 0:
-            keyboard = [
-                [InlineKeyboardButton("✍️ Списати", callback_data='confirm_write_off')],
-                [InlineKeyboardButton("🔙 Назад", callback_data='ovdp_profit')]
-            ]
-        else:
-            keyboard = [
-                [InlineKeyboardButton("🔙 Назад", callback_data='ovdp_profit')]
-            ]
-        
-        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
-        
-    except Exception as e:
-        logger.error(f"Error in write_off_profit_menu: {e}")
-        await query.edit_message_text(f"❌ Помилка: {str(e)}")
-
-
-async def show_pnl_portfolio(update: Update, context: CallbackContext):
-    """Показати PnL портфеля з live цінами"""
-    query = update.callback_query
-    await query.answer()
-    
-    try:
-        Session = context.bot_data.get('Session')
-        if not Session:
-            await query.edit_message_text("❌ Помилка підключення до бази даних")
-            return
-        
-        session = Session()
-        bonds = session.query(Bond).all()
-        session.close()
-        
-        if not bonds:
-            await query.edit_message_text("📭 Немає даних про ОВДП")
-            return
-        
-        # Розраховуємо портфель
-        portfolio = {}
-        for bond in bonds:
-            if bond.bond_number not in portfolio:
-                portfolio[bond.bond_number] = {
-                    'quantity': 0,
-                    'buy_amount': 0,
-                    'avg_price': 0
-                }
-            
-            if bond.operation_type == 'купівля':
-                portfolio[bond.bond_number]['quantity'] += bond.quantity
-                portfolio[bond.bond_number]['buy_amount'] += bond.total_amount
-            else:
-                portfolio[bond.bond_number]['quantity'] -= bond.quantity
-                portfolio[bond.bond_number]['buy_amount'] -= bond.total_amount
-        
-        # Видаляємо облігації що більше не в портфелі
-        portfolio = {k: v for k, v in portfolio.items() if v['quantity'] > 0}
-        
-        if not portfolio:
-            await query.edit_message_text("📭 Портфель пустий")
-            return
-        
-        # Розраховуємо середню ціну покупки
-        for bond_num, data in portfolio.items():
-            if data['quantity'] > 0:
-                data['avg_price'] = data['buy_amount'] / data['quantity']
-        
-        # Показуємо "завантажується..."
-        await query.edit_message_text("⏳ *Завантажую ціни з uainvest.com.ua...*", parse_mode='Markdown')
-        
-        text = "📊 *PnL Портфеля (Live)*\n\n"
-        total_buy_value = 0
-        total_current_value = 0
-        
-        for bond_num, data in sorted(portfolio.items()):
-            quantity = data['quantity']
-            avg_price = data['avg_price']
-            buy_value = data['buy_amount']
-            
-            # Парсимо ціну з uainvest
-            current_price = fetch_bond_price_icu(bond_num)
-            
-            if current_price is None:
-                current_price = avg_price  # Якщо не знайшли, показуємо цену покупки
-                price_status = " (не вдалось завантажити)"
-            else:
-                price_status = " (live)"
-            
-            current_value = current_price * quantity
-            pnl = current_value - buy_value
-            pnl_percent = (pnl / buy_value * 100) if buy_value > 0 else 0
-            
-            text += f"🔢 *Bond \"{bond_num}\"*\n"
-            text += f"   📦 Кількість: {quantity} шт\n"
-            text += f"   💰 Ціна покупки: {avg_price:.2f} грн/шт\n"
-            text += f"   📈 ICU ціна: {current_price:.2f} грн/шт{price_status}\n"
-            text += f"   💵 PnL: {pnl:+.0f} грн ({pnl_percent:+.1f}%)\n"
-            text += f"   💵 Поточна вартість: {current_value:.0f} грн\n\n"
-            
-            total_buy_value += buy_value
-            total_current_value += current_value
-        
-        # Загальні показники
-        total_pnl = total_current_value - total_buy_value
-        total_pnl_percent = (total_pnl / total_buy_value * 100) if total_buy_value > 0 else 0
-        
-        text += f"━━━━━━━━━━━━━━━━━━━━━━\n"
-        text += f"📊 *Портфель всього:*\n"
-        text += f"   📦 Кількість: {sum(d['quantity'] for d in portfolio.values())} шт\n"
-        text += f"   💵 Твоя вартість: {total_buy_value:.0f} грн\n"
-        text += f"   📈 Поточна вартість: {total_current_value:.0f} грн\n"
-        text += f"   ✅ PnL: {total_pnl:+.0f} грн ({total_pnl_percent:+.1f}%)"
-        
-        keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data='ovdp_portfolio')]]
-        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
-        
-async def show_icu_price(update: Update, context: CallbackContext):
-    """Показати ціну ICU для обраної облігації"""
-    query = update.callback_query
-    await query.answer()
-    
-    bond_number = query.data.replace('icu_price_', '')
-    
-    await query.edit_message_text(f"⏳ Завантажую ціну для {bond_number}...", parse_mode='Markdown')
-    
-    price = fetch_bond_price_icu(bond_number)
-    
-    if price:
-        text = f"📈 *ICU ціна для {bond_number}*\n\n💰 {price:.2f} грн"
-    else:
-        text = f"❌ *Не вдалося знайти ціну для {bond_number}*"
-    
-    keyboard = [[InlineKeyboardButton("🔙 Назад до портфеля", callback_data='ovdp_portfolio')]]
-    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
-
-    except Exception as e:
-        logger.error(f"Error in show_pnl_portfolio: {e}")
-        await query.edit_message_text(f"❌ Помилка: {str(e)}")
