@@ -563,7 +563,7 @@ async def show_bonds_list(update: Update, context: CallbackContext):
             return
         
         session = Session()
-        bonds = session.query(Bond).order_by(Bond.date.desc()).limit(20).all()
+        bonds = session.query(Bond).order_by(Bond.id.desc()).limit(20).all()
         session.close()
         
         if not bonds:
