@@ -158,9 +158,9 @@ class GoogleSheetsManager:
                         'operation_type': row[1] if len(row) > 1 else '',
                         'bond_number': row[2] if len(row) > 2 else '',
                         'maturity_date': row[3] if len(row) > 3 else '',
-                        'price_per_unit': float(row[4]) if len(row) > 4 and row[4] else 0,
+                        'price_per_unit': float(row[4].replace(',', '.')) if len(row) > 4 and row[4] else 0,
                         'quantity': int(row[5]) if len(row) > 5 and row[5] else 0,
-                        'total_amount': float(row[6]) if len(row) > 6 and row[6] else 0,
+                        'total_amount': float(row[6].replace(',', '.')) if len(row) > 6 and row[6] else 0,
                         'platform': row[7] if len(row) > 7 else ''
                     }
                     bonds_data.append(bond_dict)
