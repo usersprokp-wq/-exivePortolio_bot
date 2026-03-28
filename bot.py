@@ -608,7 +608,7 @@ async def show_bonds_portfolio(update: Update, context: CallbackContext, platfor
         filtered_bonds = bonds
         platform_name = "Всі"
         if platform:
-            filtered_bonds = [b for b in bonds if b.platform == platform]
+            filtered_bonds = [b for b in bonds if b.platform.upper() == platform.upper()]
             platform_name = platform
         
         if not filtered_bonds:
