@@ -794,9 +794,11 @@ async def show_profit_menu(update: Update, context: CallbackContext):
             unrealized_profit = 0
         
         text = f"💰 *Управління прибутками*\n\n"
-        text += f"📈 Реалізований прибуток: {total_profit:.0f} грн\n\n"
+        text += f"📈 Реалізований прибуток: {total_profit:.0f} грн\n"
+        text += f"📋 Не списаний прибуток: {unrealized_profit:.0f} грн\n\n"
         
         keyboard = [
+            [InlineKeyboardButton("✍️ Списати прибуток", callback_data='write_off_profit')],
             [InlineKeyboardButton("🔙 Назад", callback_data='ovdp')]
         ]
         
