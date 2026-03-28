@@ -476,8 +476,33 @@ async def sync_bonds_to_sheets(update: Update, context: CallbackContext):
                 'total_amount': data['total_amount']
             })
         
-        sheets_manager.export_bonds_portfolio(portfolio_data)
-        session.close()
+    def export_bonds_portfolio(self, portfolio_data):
+        """Експортує портфель ОВДП в Google Sheets (вкладка ОВДП-Портфель)"""
+        try:
+            worksheet = self.get_or_create_worksheet("ОВДП-Портфель")
+            worksheet.clear()
+            
+            if not portfolio_data:
+                return
+            
+            headers = ['Номер ОВДП', 'Термін до', 'Кількість', 'Середня ціна', 'Сума']
+            worksheet.append_row(headers)
+            
+            for item in portfolio_data:
+                row = [
+                    item.get('bond_number', ''),
+                    item.get('maturity_date', ''),
+                    item.get('total_quantity', 0),
+                    item.get('avg_price', 0),
+                    item.get('total_amount', 0)
+                ]
+                worksheet.append_row(row)
+            
+            logger.info(f"Exported portfolio to worksheet 'ОВДП-Портфель'")
+            return True
+        except Exception as e:
+            logger.error(f"Error exporting portfolio to sheets: {e}")
+            raise
         
         await query.edit_message_text(
             f"✅ *Синхронізація завершена!*\n\n"
