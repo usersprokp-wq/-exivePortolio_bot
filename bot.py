@@ -636,7 +636,11 @@ async def show_bonds_portfolio(update: Update, context: CallbackContext, platfor
                 portfolio[num]['total_amount'] += bond.total_amount
         
         if not portfolio:
-            await query.edit_message_text(f"📭 Немає куплених ОВДП для платформи {platform_name}")
+            keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data='ovdp_portfolio')]]
+            await query.edit_message_text(
+                f"📭 Немає куплених ОВДП для платформи {platform_name}",
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
             return
         
         # Формуємо текст
