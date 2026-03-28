@@ -585,15 +585,17 @@ async def show_bonds_stats(update: Update, context: CallbackContext):
         text += f"   {current_portfolio:.0f} грн\n"
         text += f"   Кількість ОВДП: {total_quantity} шт\n\n"
         
-        # Розраховуємо активи по платформах (тільки те що в портфелі зараз)
+        # Розраховуємо активи по платформах (беремо з портфеля)
         platform_current = {'ICU': 0, 'SENSBANK': 0}
+        
+        # Для кожної облігації в портфелі знаходимо її платформу
         for bond_num, data in portfolio_by_bond.items():
-            # Знаходимо платформу цієї облігації (беремо першу купівлю)
+            # Беремо платформу з останньої операції (купівля або продаж) для цієї облігації
             bond_platform = None
-            for bond in bonds:
-                if bond.bond_number == bond_num and bond.operation_type == 'купівля':
+            for bond in reversed(bonds):  # Йдемо з кінця щоб взяти останню
+                if bond.bond_number == bond_num:
                     bond_platform = bond.platform.upper()
-                    break  # Беремо першу купівлю
+                    break
             
             # Додаємо суму облігацій в портфелі до відповідної платформи
             if bond_platform and bond_platform in platform_current:
