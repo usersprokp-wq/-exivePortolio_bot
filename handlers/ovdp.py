@@ -885,6 +885,8 @@ async def sync_bonds_from_sheets(update: Update, context: CallbackContext):
         # Імпортуємо дані з Google Sheets
         excel_bonds_data = sheets_manager.import_bonds_from_sheets()
         
+        logger.info(f"DEBUG: excel_bonds_data count = {len(excel_bonds_data)}")
+        
         if not excel_bonds_data:
             await query.edit_message_text("📭 Немає даних в Excel для синхронізації")
             return
@@ -922,6 +924,9 @@ async def sync_bonds_from_sheets(update: Update, context: CallbackContext):
         updated = 0
         deleted = 0
         errors = []
+        
+        logger.info(f"DEBUG: excel_keys count = {len(excel_keys)}")
+        logger.info(f"DEBUG: db_keys count = {len(db_keys)}")
         
         # 1. Додаємо нові та оновлюємо існуючі
         for key, excel_bond in excel_data_by_key.items():
