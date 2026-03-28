@@ -138,17 +138,21 @@ class GoogleSheetsManager:
             worksheet = self.get_or_create_worksheet("ОВДП-Записи")
             all_rows = worksheet.get_all_values()
             
+            logger.info(f"DEBUG: all_rows count = {len(all_rows)}")
+            
             if not all_rows or len(all_rows) < 2:
-                logger.warning("No data in ОВДП-Записи sheet")
+                logger.warning(f"No data in ОВДП-Записи sheet. Rows: {len(all_rows) if all_rows else 0}")
                 return []
             
             # Перший рядок - заголовки
             headers = all_rows[0]
+            logger.info(f"DEBUG: headers = {headers}")
             bonds_data = []
             
             # Обробляємо дані з рядків 1+ (пропускаємо заголовок)
-            for row in all_rows[1:]:
+            for idx, row in enumerate(all_rows[1:]):
                 if not any(row):  # Пропускаємо порожні рядки
+                    logger.debug(f"Skipping empty row {idx}")
                     continue
                 
                 # Мапимо рядок на словник за заголовками
@@ -165,7 +169,7 @@ class GoogleSheetsManager:
                     }
                     bonds_data.append(bond_dict)
                 except (ValueError, IndexError) as e:
-                    logger.warning(f"Error parsing row: {e}")
+                    logger.warning(f"Error parsing row {idx}: {e}, row={row}")
                     continue
             
             logger.info(f"Imported {len(bonds_data)} bonds from worksheet 'ОВДП-Записи'")
