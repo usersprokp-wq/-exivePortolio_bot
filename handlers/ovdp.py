@@ -55,12 +55,12 @@ def fetch_bond_price_icu(bond_number):
         
         # Шукаємо рядок облігації по ISIN
         try:
-            # XPath для пошуку облігації по ISIN коду
-            bond_xpath = f"//td[contains(text(), '{bond_id}')]"
+            # XPath для пошуку облігації - шукаємо по contains замість точного збігу
+            bond_xpath = f"//td[contains(text(), '{bond_number}')]"
             bond_element = WebDriverWait(driver, 10).until(
                 EC.presence_of_element_located((By.XPATH, bond_xpath))
             )
-            logger.info(f"Found bond {bond_id}")
+            logger.info(f"Found bond {bond_number}")
             
             # Клікаємо на облігацію щоб розкрити список брокерів
             bond_row = bond_element.find_element(By.XPATH, "ancestor::tr")
