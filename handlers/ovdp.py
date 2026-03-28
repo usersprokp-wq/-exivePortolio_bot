@@ -581,12 +581,26 @@ async def show_bonds_stats(update: Update, context: CallbackContext):
         bond_stats, realized_profit = calculate_profit_by_price(bonds)
         
         text = "📊 *Статистика ОВДП*\n\n"
-        text += "💰 *Вартість ОВДП в портфелі:*\n"
+        text += "💰 *Вартість портфеля:*\n"
         text += f"   {current_portfolio:.0f} грн\n"
         text += f"   Кількість ОВДП: {total_quantity} шт\n\n"
-        text += "🏦 *Інвестування по платформах:*\n"
-        text += f"   ICU: {platform_stats['ICU']:.0f} грн\n"
-        text += f"   SENSBANK: {platform_stats['SENSBANK']:.0f} грн\n\n"
+        
+        # Розраховуємо активи по платформах (тільки те що в портфелі зараз)
+        platform_current = {'ICU': 0, 'SENSBANK': 0}
+        for bond_num, data in portfolio_by_bond.items():
+            # Знаходимо платформу цієї облігації
+            for bond in bonds:
+                if bond.bond_number == bond_num and bond.operation_type == 'купівля':
+                    platform = bond.platform.upper()
+                    if platform in platform_current:
+                        # Додаємо тільки якщо облігація ще в портфелі
+                        if data['total_amount'] > 0:
+                            platform_current[platform] = data['total_amount']
+                    break
+        
+        text += "🏦 *Активи по платформах:*\n"
+        text += f"   ICU: {platform_current['ICU']:.0f} грн\n"
+        text += f"   SENSBANK: {platform_current['SENSBANK']:.0f} грн\n\n"
         text += "📈 *Реалізований прибуток:*\n"
         text += f"   {realized_profit:.0f} грн\n\n"
         text += "📊 *Динаміка прибутку по місяцях:*\n"
