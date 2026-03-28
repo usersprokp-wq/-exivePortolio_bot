@@ -79,8 +79,7 @@ def fetch_bond_price_icu(bond_number):
 
 def calculate_monthly_profit(bonds):
     """
-    Розраховує прибуток (реалізований) по місяцях на основі FIFO результатів.
-    Враховує тільки прибуток від помфактично проданих облігацій.
+    Розраховує прибуток по місяцях на основі FIFO результатів з calculate_profit_by_price.
     """
     from datetime import datetime
     
@@ -390,11 +389,11 @@ async def handle_message_ovdp(update: Update, context: CallbackContext):
         elif step == 'enter_amount':
             try:
                 write_off_amount = float(user_message)
-                realized_profit = context.user_data.get('realized_profit', 0)
+                unrealized_profit = context.user_data.get('unrealized_profit', 0)
                 
-                if write_off_amount > realized_profit:
+                if write_off_amount > unrealized_profit:
                     await update.message.reply_text(
-                        f"❌ Сума перевищує реалізований прибуток ({realized_profit:.0f} грн)\n\n"
+                        f"❌ Сума перевищує нереалізований прибуток ({unrealized_profit:.0f} грн)\n\n"
                         f"Введіть коректну суму:"
                     )
                     return
@@ -413,14 +412,14 @@ async def handle_message_ovdp(update: Update, context: CallbackContext):
                     operation_date=datetime.now().strftime('%d.%m.%Y'),
                     operation_type='списання',
                     amount=0,
-                    realized_profit=write_off_amount,
-                    unrealized_profit=0
+                    realized_profit=0,
+                    unrealized_profit=write_off_amount
                 )
                 session.add(profit_record)
                 session.commit()
                 session.close()
                 
-                remaining_profit = realized_profit - write_off_amount
+                remaining_profit = unrealized_profit - write_off_amount
                 text = f"✅ *Оновлено!*\n\n"
                 text += f"📝 Списано: {write_off_amount:.0f} грн\n"
                 text += f"📋 Залишок: {remaining_profit:.0f} грн"
@@ -437,7 +436,7 @@ async def handle_message_ovdp(update: Update, context: CallbackContext):
                 )
                 
                 context.user_data.pop('profit_step', None)
-                context.user_data.pop('realized_profit', None)
+                context.user_data.pop('unrealized_profit', None)
                 
             except ValueError:
                 await update.message.reply_text("❌ Будь ласка, введіть коректне число")
@@ -636,7 +635,6 @@ async def show_bonds_stats(update: Update, context: CallbackContext):
         total_buy = 0
         total_sell = 0
         total_quantity = 0
-        monthly_profit = {}
         portfolio_by_bond = {}
         
         for bond in bonds:
@@ -661,14 +659,6 @@ async def show_bonds_stats(update: Update, context: CallbackContext):
                 total_quantity -= bond.quantity
                 portfolio_by_bond[bond.bond_number]['quantity'] -= bond.quantity
                 portfolio_by_bond[bond.bond_number]['total_amount'] -= amount
-            
-            month = bond.date[:7] if len(bond.date) >= 7 else bond.date
-            if month not in monthly_profit:
-                monthly_profit[month] = {'buy': 0, 'sell': 0}
-            if bond.operation_type == 'купівля':
-                monthly_profit[month]['buy'] += amount
-            else:
-                monthly_profit[month]['sell'] += amount
         
         current_portfolio = total_buy - total_sell
         
@@ -699,7 +689,6 @@ async def show_bonds_stats(update: Update, context: CallbackContext):
         text += "🏦 *Активи по платформах:*\n"
         text += f"   ICU: {platform_current['ICU']:.0f} грн\n"
         text += f"   SENSBANK: {platform_current['SENSBANK']:.0f} грн\n\n"
-        
         text += "📈 *Реалізований прибуток:*\n"
         text += f"   {realized_profit:.0f} грн\n\n"
         text += "📊 *Динаміка прибутку по місяцях:*\n"
@@ -774,27 +763,25 @@ async def show_profit_menu(update: Update, context: CallbackContext):
             await query.edit_message_text("📭 Немає даних про ОВДП")
             return
         
-        # Розраховуємо РЕАЛІЗОВАНИЙ прибуток (від проданих)
-        bond_stats, realized_profit = calculate_profit_by_price(bonds)
+        # Розраховуємо прибуток по ціні
+        bond_stats, total_profit = calculate_profit_by_price(bonds)
         
         # Отримуємо списаний прибуток
         session = Session()
-        profit_records = session.query(ProfitRecord).filter(ProfitRecord.realized_profit > 0).all()
+        profit_records = session.query(ProfitRecord).filter(ProfitRecord.unrealized_profit > 0).all()
         session.close()
         
         total_written_off = 0
         for record in profit_records:
-            total_written_off += record.realized_profit
+            total_written_off += record.unrealized_profit
         
-        # Чистий реалізований прибуток = загальний мінус списаний
-        net_realized_profit = realized_profit - total_written_off
-        if net_realized_profit < 0:
-            net_realized_profit = 0
+        unrealized_profit = total_profit - total_written_off
+        if unrealized_profit < 0:
+            unrealized_profit = 0
         
         text = f"💰 *Управління прибутками*\n\n"
-        text += f"📈 Реалізований прибуток: {realized_profit:.0f} грн\n"
-        text += f"📋 Уже списано: {total_written_off:.0f} грн\n"
-        text += f"✅ Доступний для списання: {net_realized_profit:.0f} грн\n\n"
+        text += f"📈 Реалізований прибуток: {total_profit:.0f} грн\n"
+        text += f"📋 Не списаний прибуток: {unrealized_profit:.0f} грн\n\n"
         
         keyboard = [
             [InlineKeyboardButton("✍️ Списати прибуток", callback_data='write_off_profit')],
@@ -828,31 +815,27 @@ async def write_off_profit_menu(update: Update, context: CallbackContext):
             await query.edit_message_text("📭 Немає даних про ОВДП")
             return
         
-        # Розраховуємо РЕАЛІЗОВАНИЙ прибуток
-        bond_stats, realized_profit = calculate_profit_by_price(bonds)
+        # Розраховуємо прибуток по ціні
+        bond_stats, total_profit = calculate_profit_by_price(bonds)
         
-        # Отримуємо списаний прибуток
         session = Session()
-        profit_records = session.query(ProfitRecord).filter(ProfitRecord.realized_profit > 0).all()
+        profit_records = session.query(ProfitRecord).filter(ProfitRecord.unrealized_profit > 0).all()
         session.close()
         
         total_written_off = 0
         for record in profit_records:
-            total_written_off += record.realized_profit
+            total_written_off += record.unrealized_profit
         
-        # Чистий реалізований прибуток = загальний мінус списаний
-        net_realized_profit = realized_profit - total_written_off
-        if net_realized_profit < 0:
-            net_realized_profit = 0
+        unrealized_profit = total_profit - total_written_off
+        if unrealized_profit < 0:
+            unrealized_profit = 0
         
-        context.user_data['realized_profit'] = net_realized_profit
+        context.user_data['unrealized_profit'] = unrealized_profit
         
-        text = f"💰 *Списання реалізованого прибутку*\n\n"
-        text += f"📈 Загальний реалізований прибуток: {realized_profit:.0f} грн\n"
-        text += f"📋 Уже списано: {total_written_off:.0f} грн\n"
-        text += f"✅ Доступний для списання: *{net_realized_profit:.0f} грн*\n\n"
+        text = f"💰 *Списання прибутку*\n\n"
+        text += f"📋 Не списаний прибуток: *{unrealized_profit:.0f} грн*\n\n"
         
-        if realized_profit > 0:
+        if unrealized_profit > 0:
             keyboard = [
                 [InlineKeyboardButton("✍️ Списати", callback_data='confirm_write_off')],
                 [InlineKeyboardButton("🔙 Назад", callback_data='ovdp_profit')]
