@@ -25,97 +25,78 @@ except ImportError:
 def fetch_bond_price_icu(bond_number):
     """
     Парсить ціну облігації з uainvest.com.ua для ICU
-    Простіший варіант без Selenium
+    Спрощена версія за робочим прикладом
     """
     try:
         import requests
         from bs4 import BeautifulSoup
         
+        isin = f"UA{bond_number}"
         url = "https://uainvest.com.ua/ukrbonds"
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        }
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
         
-        logger.info(f"Fetching price for bond {bond_number} from {url}")
+        logger.info(f"Fetching price for ISIN {isin}")
         
         response = requests.get(url, headers=headers, timeout=15)
-        response.encoding = 'utf-8'
+        soup = BeautifulSoup(response.text, 'html.parser')
         
-        soup = BeautifulSoup(response.content, 'html.parser')
-        
-        # Шукаємо облігацію по номеру у <a> тегу
-        bond_isin = f"UA{bond_number}"
-        bond_link = soup.find('a', string=lambda s: s and bond_number in s)
-        
-        if not bond_link:
-            logger.warning(f"Bond link not found for {bond_number}")
+        table = soup.find('table')
+        if not table:
+            logger.warning("Table not found")
             return None
         
-        logger.info(f"Found bond link: {bond_link.get_text(strip=True)}")
-        
-        # Батьківський TR облігації
-        bond_tr = bond_link.find_parent('tr')
-        if not bond_tr:
-            logger.warning("Could not find bond TR")
+        rows = table.find_all('tr')
+        if len(rows) < 2:
+            logger.warning("No data rows in table")
             return None
         
-        # Батьківський TBODY
-        tbody = bond_tr.find_parent('tbody')
-        if not tbody:
-            logger.warning("Could not find tbody")
+        # Знаходимо індекси колонок з заголовків
+        headers_row = rows[0].find_all('th')
+        isin_col = broker_col = price_col = None
+        
+        for i, th in enumerate(headers_row):
+            text = th.text.strip()
+            if text == 'ISIN':
+                isin_col = i
+            elif text == 'Брокер':
+                broker_col = i
+            elif text == 'Ціна':
+                price_col = i
+        
+        logger.info(f"Column indices - ISIN: {isin_col}, Broker: {broker_col}, Price: {price_col}")
+        
+        if isin_col is None or broker_col is None or price_col is None:
+            logger.error("Could not find required columns")
             return None
         
-        # Отримуємо всі TR після TR облігації
-        all_rows = tbody.find_all('tr')
-        bond_row_index = all_rows.index(bond_tr)
-        
-        logger.info(f"Bond is at row index {bond_row_index}, searching for ICU in next rows")
-        
-        # Шукаємо ICU рядок серед наступних 10 рядків
-        for i in range(bond_row_index + 1, min(bond_row_index + 10, len(all_rows))):
-            row = all_rows[i]
-            row_text = row.get_text(strip=True).lower()
+        # Проходимо по рядках і шукаємо облігацію з ICU ціною
+        for row in rows[1:]:
+            cells = row.find_all('td')
             
-            # Перевіряємо чи є ICU в цьому рядку
-            if 'icu' in row_text:
-                logger.info(f"Found ICU row at index {i}")
+            if len(cells) <= max(isin_col, broker_col, price_col):
+                continue
+            
+            current_isin = cells[isin_col].text.strip()
+            
+            # Шукаємо нашу облігацію
+            if current_isin.startswith(isin):
+                broker = cells[broker_col].text.strip().lower()
+                price_text = cells[price_col].text.strip()
                 
-                # Шукаємо img з класом "bank-logo-icu"
-                icu_img = row.find('img', class_='bank-logo-icu')
-                if not icu_img:
-                    logger.debug("ICU image not found in this row")
-                    continue
+                logger.info(f"Found {current_isin} - Broker: {broker}, Price: {price_text}")
                 
-                # Батьківська TD
-                icu_td = icu_img.find_parent('td')
-                if not icu_td:
-                    logger.warning("Could not find ICU TD parent")
-                    continue
-                
-                # Наступна TD (там ціна)
-                next_td = icu_td.find_next_sibling('td')
-                if not next_td:
-                    logger.warning("Could not find next TD after ICU")
-                    continue
-                
-                price_text = next_td.get_text(strip=True)
-                logger.info(f"Found price text: {price_text}")
-                
-                if price_text and price_text != '-':
+                # Шукаємо ICU брокер
+                if broker == 'icu' and price_text != '-':
                     try:
                         price = float(price_text.replace(',', '.'))
                         if 500 <= price <= 3000:
                             logger.info(f"✅ Found ICU price: {price}")
                             return price
-                        else:
-                            logger.warning(f"Price {price} is outside valid range")
-                    except ValueError as e:
-                        logger.warning(f"Could not parse price '{price_text}': {e}")
-                
-                # Знайшли ICU рядок, але ціна не валідна
-                break
+                    except ValueError:
+                        logger.warning(f"Could not parse price: {price_text}")
+                        continue
         
-        logger.warning(f"ICU price not found for {bond_number}")
+        logger.warning(f"ICU price not found for {isin}")
         return None
         
     except Exception as e:
