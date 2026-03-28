@@ -42,6 +42,17 @@ class Bond(Base):
     platform = Column(String(100))
     created_at = Column(String(50), default=datetime.now().isoformat())
 
+class ProfitRecord(Base):
+    """Таблиця для відслідкування прибутків"""
+    __tablename__ = 'profit_records'
+    id = Column(Integer, primary_key=True)
+    operation_date = Column(String(50))  # Дата операції купівлі/продажу
+    operation_type = Column(String(20))  # 'купівля' або 'продаж'
+    amount = Column(Float)  # Сума операції
+    realized_profit = Column(Float, default=0)  # Реалізований прибуток
+    unrealized_profit = Column(Float, default=0)  # Нереалізований прибуток (для списання)
+    created_at = Column(String(50), default=datetime.now().isoformat())
+
 if DATABASE_URL:
     engine = create_engine(DATABASE_URL)
     Base.metadata.create_all(engine)
@@ -91,6 +102,7 @@ async def button_handler(update: Update, context: CallbackContext):
             [InlineKeyboardButton("📋 Мої записи", callback_data='ovdp_list')],
             [InlineKeyboardButton("💼 Портфель", callback_data='ovdp_portfolio')],
             [InlineKeyboardButton("📊 Статистика", callback_data='ovdp_stats')],
+            [InlineKeyboardButton("💰 Прибуток", callback_data='ovdp_profit')],
             [InlineKeyboardButton("🔙 Назад", callback_data='back_to_menu')]
         ]
         await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
@@ -151,7 +163,9 @@ async def button_handler(update: Update, context: CallbackContext):
         
     elif query.data == 'sync_sheets_to_db':
         await query.edit_message_text("🔄 Синхронізація Excel → БД\n\n(в розробці)", parse_mode='Markdown')
-
+    
+    elif query.data == 'ovdp_profit':
+        await show_profit_menu(update, context)
 
     elif query.data.startswith('date_'):
         date_value = query.data.replace('date_', '')
@@ -188,372 +202,181 @@ async def button_handler(update: Update, context: CallbackContext):
         keyboard = [
             [InlineKeyboardButton(f"📅 Сьогодні ({today.strftime('%d.%m.%Y')})", callback_data=f'date_{today.strftime("%d.%m.%Y")}')],
             [InlineKeyboardButton(f"📅 Завтра ({tomorrow.strftime('%d.%m.%Y')})", callback_data=f'date_{tomorrow.strftime("%d.%m.%Y")}')],
-            [InlineKeyboardButton(f"📅 Через 3 дні ({three_days.strftime('%d.%m.%Y')})", callback_data=f'date_{three_days.strftime("%d.%m.%Y")}')],
+            [InlineKeyboardButton(f"📅 За 3 дні ({three_days.strftime('%d.%m.%Y')})", callback_data=f'date_{three_days.strftime("%d.%m.%Y")}')],
             [InlineKeyboardButton(f"📅 Через тиждень ({week.strftime('%d.%m.%Y')})", callback_data=f'date_{week.strftime("%d.%m.%Y")}')],
-            [InlineKeyboardButton("✏️ Ввести вручну", callback_data='date_manual')]
+            [InlineKeyboardButton("📅 Вручну", callback_data='date_manual')],
+            [InlineKeyboardButton("🔙 Назад", callback_data='ovdp')]
         ]
         await query.edit_message_text(
-            "📅 *Виберіть дату операції:*",
+            "📈 *Додавання запису ОВДП*\n\n📅 Виберіть дату операції:",
             reply_markup=InlineKeyboardMarkup(keyboard),
             parse_mode='Markdown'
         )
-
-    elif query.data == 'ovdp_stats':
-        await show_bonds_stats(update, context)
     
     elif query.data == 'bond_buy':
         context.user_data['bond_operation_type'] = 'купівля'
         context.user_data['bond_step'] = 'bond_number'
-        await query.edit_message_text("📈 Введіть номер ОВДП:", parse_mode='Markdown')
-        
+        await query.edit_message_text("🔢 Введіть номер ОВДП (наприклад: МХ3012-202):", parse_mode='Markdown')
+    
     elif query.data == 'bond_sell':
         context.user_data['bond_operation_type'] = 'продаж'
         context.user_data['bond_step'] = 'bond_number'
-        await query.edit_message_text("📈 Введіть номер ОВДП:", parse_mode='Markdown')
-        
-    elif query.data == 'bond_confirm_amount':
-        quantity = context.user_data.get('bond_quantity', 0)
-        price = context.user_data.get('bond_price_per_unit', 0)
-        total = quantity * price
-        context.user_data['bond_total_amount'] = total
-        context.user_data['bond_step'] = 'platform'
-        keyboard = [
-            [InlineKeyboardButton("🏦 ICU", callback_data='platform_icu')],
-            [InlineKeyboardButton("🏦 SENSBANK", callback_data='platform_sensbank')]
-        ]
-        await query.edit_message_text(
-            f"📈 Сума: {total} грн\n\nВиберіть платформу:",
-            reply_markup=InlineKeyboardMarkup(keyboard)
-        )
-        
-    elif query.data == 'bond_edit_amount':
-        context.user_data['bond_step'] = 'total_amount_manual'
-        await query.edit_message_text("📈 Введіть суму вручну:", parse_mode='Markdown')
-
+        await query.edit_message_text("🔢 Введіть номер ОВДП для продажу:", parse_mode='Markdown')
+    
     elif query.data == 'ovdp_list':
         await show_bonds_list(update, context)
-
+    
     elif query.data == 'ovdp_portfolio':
-        await show_bonds_portfolio(update, context, platform=None)
-
-    elif query.data == 'portfolio_icu':
-        await show_bonds_portfolio(update, context, platform='ICU')
-        
-    elif query.data == 'portfolio_sensbank':
-        await show_bonds_portfolio(update, context, platform='SENSBANK')
-
-    elif query.data == 'platform_icu':
-        context.user_data['bond_platform'] = 'ICU'
-        # Продовжуємо збереження
-        session = Session()
-        bond = Bond(
-            date=context.user_data['bond_date'],
-            operation_type=context.user_data['bond_operation_type'],
-            bond_number=context.user_data['bond_number'],
-            maturity_date=context.user_data['bond_maturity_date'],
-            price_per_unit=context.user_data['bond_price_per_unit'],
-            quantity=context.user_data['bond_quantity'],
-            total_amount=context.user_data['bond_total_amount'],
-            platform='ICU'
-        )
-        session.add(bond)
-        session.commit()
-        
-        bond_data = {
-            'date': bond.date,
-            'operation_type': bond.operation_type,
-            'bond_number': bond.bond_number,
-            'maturity_date': bond.maturity_date,
-            'price_per_unit': bond.price_per_unit,
-            'quantity': bond.quantity,
-            'total_amount': bond.total_amount,
-            'platform': bond.platform
-        }
-        session.close()
-        
-        context.user_data.clear()
-        
-        keyboard = [[InlineKeyboardButton("🔙 Назад до ОВДП", callback_data='ovdp')]]
-        await query.edit_message_text(
-            f"✅ *ОВДП додано!*\n\n"
-            f"📅 Дата: {bond_data['date']}\n"
-            f"🔄 Тип: {bond_data['operation_type']}\n"
-            f"🔢 Номер: {bond_data['bond_number']}\n"
-            f"📆 Термін до: {bond_data['maturity_date']}\n"
-            f"💰 Ціна: {bond_data['price_per_unit']} грн\n"
-            f"📦 Кількість: {bond_data['quantity']}\n"
-            f"💵 Сума: {bond_data['total_amount']} грн\n"
-            f"🏦 Платформа: {bond_data['platform']}",
-            reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode='Markdown'
-        )
-        
-    elif query.data == 'platform_sensbank':
-        context.user_data['bond_platform'] = 'SENSBANK'
-        # Аналогічний код для SENSBANK
-        session = Session()
-        bond = Bond(
-            date=context.user_data['bond_date'],
-            operation_type=context.user_data['bond_operation_type'],
-            bond_number=context.user_data['bond_number'],
-            maturity_date=context.user_data['bond_maturity_date'],
-            price_per_unit=context.user_data['bond_price_per_unit'],
-            quantity=context.user_data['bond_quantity'],
-            total_amount=context.user_data['bond_total_amount'],
-            platform='SENSBANK'
-        )
-        session.add(bond)
-        session.commit()
-        
-        bond_data = {
-            'date': bond.date,
-            'operation_type': bond.operation_type,
-            'bond_number': bond.bond_number,
-            'maturity_date': bond.maturity_date,
-            'price_per_unit': bond.price_per_unit,
-            'quantity': bond.quantity,
-            'total_amount': bond.total_amount,
-            'platform': bond.platform
-        }
-        session.close()
-        
-        context.user_data.clear()
-        
-        keyboard = [[InlineKeyboardButton("🔙 Назад до ОВДП", callback_data='ovdp')]]
-        await query.edit_message_text(
-            f"✅ *ОВДП додано!*\n\n"
-            f"📅 Дата: {bond_data['date']}\n"
-            f"🔄 Тип: {bond_data['operation_type']}\n"
-            f"🔢 Номер: {bond_data['bond_number']}\n"
-            f"📆 Термін до: {bond_data['maturity_date']}\n"
-            f"💰 Ціна: {bond_data['price_per_unit']} грн\n"
-            f"📦 Кількість: {bond_data['quantity']}\n"
-            f"💵 Сума: {bond_data['total_amount']} грн\n"
-            f"🏦 Платформа: {bond_data['platform']}",
-            reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode='Markdown'
-        )
+        await show_bonds_portfolio(update, context)
+    
+    elif query.data == 'ovdp_stats':
+        await show_bonds_stats(update, context)
+    
+    elif query.data.startswith('portfolio_'):
+        platform = query.data.replace('portfolio_', '')
+        await show_bonds_portfolio(update, context, platform)
 
 async def handle_message(update: Update, context: CallbackContext):
-    # Додавання ОВДП
-    if context.user_data.get('adding_bond'):
-        step = context.user_data.get('bond_step')
-        
+    user_message = update.message.text
+    
+    if 'bond_step' not in context.user_data:
+        await update.message.reply_text("Будь ласка, скористайтеся меню /start")
+        return
+    
+    step = context.user_data['bond_step']
+    
+    try:
         if step == 'date_manual':
-            context.user_data['bond_date'] = update.message.text
-            context.user_data['bond_step'] = 'operation_type'
-            keyboard = [
-                [InlineKeyboardButton("🟢 Купівля", callback_data='bond_buy')],
-                [InlineKeyboardButton("🔴 Продаж", callback_data='bond_sell')]
-            ]
-            await update.message.reply_text(
-                f"📅 Дата: {update.message.text}\n\n📈 Виберіть тип операції:",
-                reply_markup=InlineKeyboardMarkup(keyboard)
-            )
-
-        if step == 'date':
-            context.user_data['bond_date'] = update.message.text
-            context.user_data['bond_step'] = 'operation_type'
-            keyboard = [
-                [InlineKeyboardButton("🟢 Купівля", callback_data='bond_buy')],
-                [InlineKeyboardButton("🔴 Продаж", callback_data='bond_sell')]
-            ]
-            await update.message.reply_text(
-                "📈 Виберіть тип операції:",
-                reply_markup=InlineKeyboardMarkup(keyboard)
-            )
-            
-        elif step == 'operation_type':
-            keyboard = [
-                [InlineKeyboardButton("🟢 Купівля", callback_data='bond_buy')],
-                [InlineKeyboardButton("🔴 Продаж", callback_data='bond_sell')]
-            ]
-            await update.message.reply_text(
-                "📈 Виберіть тип операції:",
-                reply_markup=InlineKeyboardMarkup(keyboard)
-            )
-            return
-            
-        elif step == 'bond_number':
-            context.user_data['bond_number'] = update.message.text
-            context.user_data['bond_step'] = 'maturity_date'
-            await update.message.reply_text("📈 Введіть термін до (дату погашення ДД.ММ.РРРР):")
-            
-        elif step == 'maturity_date':
-            date_value = update.message.text
-            if '.' not in date_value:
-                await update.message.reply_text("❌ Використовуйте крапку! Наприклад: 10.12.2025")
-                return
-            date_value = date_value.replace(',', '.')
-            context.user_data['bond_maturity_date'] = date_value
-            context.user_data['bond_step'] = 'price_per_unit'
-            await update.message.reply_text("📈 Введіть ціну за шт:")
-            
-        elif step == 'price_per_unit':
+            # Перевіряємо формат дати
             try:
-                context.user_data['bond_price_per_unit'] = float(update.message.text)
-                context.user_data['bond_step'] = 'quantity'
-                await update.message.reply_text("📈 Введіть кількість:")
-            except:
-                await update.message.reply_text("❌ Введіть число:")
-                
-        elif step == 'quantity':
-            try:
-                quantity = int(update.message.text)
-                context.user_data['bond_quantity'] = quantity
-                price = context.user_data.get('bond_price_per_unit', 0)
-                total = quantity * price
+                datetime.strptime(user_message, '%d.%m.%Y')
+                context.user_data['bond_date'] = user_message
+                context.user_data['bond_step'] = 'operation_type'
                 
                 keyboard = [
-                    [InlineKeyboardButton(f"✅ Прийняти {total} грн", callback_data='bond_confirm_amount')],
-                    [InlineKeyboardButton("✏️ Ввести свою суму", callback_data='bond_edit_amount')]
+                    [InlineKeyboardButton("🟢 Купівля", callback_data='bond_buy')],
+                    [InlineKeyboardButton("🔴 Продаж", callback_data='bond_sell')]
                 ]
                 await update.message.reply_text(
-                    f"📈 Розрахована сума: {total} грн\n\nОберіть дію:",
-                    reply_markup=InlineKeyboardMarkup(keyboard)
+                    f"📅 Дата: {user_message}\n\n📈 Виберіть тип операції:",
+                    reply_markup=InlineKeyboardMarkup(keyboard),
+                    parse_mode='Markdown'
                 )
-                context.user_data['bond_step'] = 'confirm_amount'
-            except:
-                await update.message.reply_text("❌ Введіть ціле число:")
-                
-        elif step == 'total_amount_manual':
+            except ValueError:
+                await update.message.reply_text("❌ Невірний формат дати. Будь ласка, введіть у форматі ДД.ММ.РРРР")
+        
+        elif step == 'bond_number':
+            context.user_data['bond_number'] = user_message
+            context.user_data['bond_step'] = 'maturity_date'
+            await update.message.reply_text("📆 Введіть термін погашення (ДД.ММ.РРРР):")
+        
+        elif step == 'maturity_date':
             try:
-                context.user_data['bond_total_amount'] = float(update.message.text)
+                datetime.strptime(user_message, '%d.%m.%Y')
+                context.user_data['maturity_date'] = user_message
+                context.user_data['bond_step'] = 'price_per_unit'
+                await update.message.reply_text("💰 Введіть ціну за одну облігацію:")
+            except ValueError:
+                await update.message.reply_text("❌ Невірний формат дати. Будь ласка, введіть у форматі ДД.ММ.РРРР")
+        
+        elif step == 'price_per_unit':
+            try:
+                price = float(user_message)
+                context.user_data['price_per_unit'] = price
+                context.user_data['bond_step'] = 'quantity'
+                await update.message.reply_text("📦 Введіть кількість облігацій:")
+            except ValueError:
+                await update.message.reply_text("❌ Будь ласка, введіть коректне число")
+        
+        elif step == 'quantity':
+            try:
+                quantity = int(user_message)
+                context.user_data['quantity'] = quantity
+                total_amount = context.user_data['price_per_unit'] * quantity
+                context.user_data['total_amount'] = total_amount
                 context.user_data['bond_step'] = 'platform'
+                
                 keyboard = [
                     [InlineKeyboardButton("🏦 ICU", callback_data='platform_icu')],
                     [InlineKeyboardButton("🏦 SENSBANK", callback_data='platform_sensbank')]
                 ]
                 await update.message.reply_text(
-                    "📈 Виберіть платформу:",
+                    f"💵 Сума: {total_amount:.2f} грн\n\n🏦 Виберіть платформу:",
                     reply_markup=InlineKeyboardMarkup(keyboard)
                 )
-            except:
-                await update.message.reply_text("❌ Введіть число:")
-                
-        elif step == 'platform':
-            keyboard = [
-                [InlineKeyboardButton("🏦 ICU", callback_data='platform_icu')],
-                [InlineKeyboardButton("🏦 SENSBANK", callback_data='platform_sensbank')]
-            ]
-            await update.message.reply_text(
-                "📈 Виберіть платформу:",
-                reply_markup=InlineKeyboardMarkup(keyboard)
-            )
-            return
+            except ValueError:
+                await update.message.reply_text("❌ Будь ласка, введіть коректне число")
+        
+        elif step == 'platform_select':
+            context.user_data['platform'] = user_message
+            await save_bond(update, context)
     
-    # Старий код для товарів
-    elif context.user_data.get('adding'):
-        context.user_data['name'] = update.message.text
-        context.user_data['awaiting_price'] = True
-        await update.message.reply_text("💰 Введіть ціну:")
-    elif context.user_data.get('awaiting_price'):
-        try:
-            price = float(update.message.text)
-            context.user_data['price'] = price
-            context.user_data['awaiting_quantity'] = True
-            await update.message.reply_text("📦 Введіть кількість:")
-        except:
-            await update.message.reply_text("❌ Введіть число:")
-    elif context.user_data.get('awaiting_quantity'):
-        try:
-            quantity = int(update.message.text)
-            
-            session = Session()
-            product = Product(
-                name=context.user_data['name'],
-                price=context.user_data['price'],
-                quantity=quantity
-            )
-            session.add(product)
-            session.commit()
-            session.close()
-            
-            context.user_data.clear()
-            await update.message.reply_text(f"✅ Товар додано!\nНазва: {product.name}\nЦіна: {product.price} грн\nКількість: {product.quantity}")
-        except:
-            await update.message.reply_text("❌ Введіть ціле число:")
-    else:
-        await update.message.reply_text("Використайте /start")
+    except Exception as e:
+        logger.error(f"Error in handle_message: {e}")
+        await update.message.reply_text(f"❌ Помилка: {str(e)}")
 
-
-async def sync_bonds_to_sheets(update: Update, context: CallbackContext):
-    """Синхронізація даних ОВДП з Google Sheets"""
+async def button_platform_handler(update: Update, context: CallbackContext):
     query = update.callback_query
     await query.answer()
-    await query.edit_message_text("🔄 Синхронізація даних з Google Sheets...")
     
+    if query.data == 'platform_icu':
+        context.user_data['platform'] = 'ICU'
+        await save_bond(update, context)
+    elif query.data == 'platform_sensbank':
+        context.user_data['platform'] = 'SENSBANK'
+        await save_bond(update, context)
+
+async def save_bond(update: Update, context: CallbackContext):
+    """Зберігає облігацію в базу даних"""
     try:
-        if not Session or not sheets_manager:
-            await query.edit_message_text("❌ Помилка підключення")
+        if not Session:
+            await update.message.reply_text("❌ Помилка підключення до бази даних")
             return
         
         session = Session()
-        bonds = session.query(Bond).all()
         
-        if not bonds:
-            await query.edit_message_text("⚠️ Немає даних для синхронізації")
-            session.close()
-            return
+        bond = Bond(
+            date=context.user_data['bond_date'],
+            operation_type=context.user_data['bond_operation_type'],
+            bond_number=context.user_data['bond_number'],
+            maturity_date=context.user_data['maturity_date'],
+            price_per_unit=context.user_data['price_per_unit'],
+            quantity=context.user_data['quantity'],
+            total_amount=context.user_data['total_amount'],
+            platform=context.user_data['platform']
+        )
         
-        # Експортуємо записи
-        bonds_data = []
-        for bond in bonds:
-            bonds_data.append({
-                'date': bond.date,
-                'operation_type': bond.operation_type,
-                'bond_number': bond.bond_number,
-                'maturity_date': bond.maturity_date,
-                'price_per_unit': bond.price_per_unit,
-                'quantity': bond.quantity,
-                'total_amount': bond.total_amount,
-                'platform': bond.platform
-            })
+        session.add(bond)
+        session.commit()
         
-        sheets_manager.export_bonds_to_sheets(bonds_data)
+        # Також зберігаємо в таблицю прибутків
+        profit_record = ProfitRecord(
+            operation_date=context.user_data['bond_date'],
+            operation_type=context.user_data['bond_operation_type'],
+            amount=context.user_data['total_amount']
+        )
         
-        # Розраховуємо портфель (сумуємо по номерах ОВДП)
-        portfolio = {}
-        for bond in bonds:
-            if bond.operation_type == 'купівля':
-                num = bond.bond_number
-                # Форматуємо дату: замінюємо кому на крапку
-                maturity = bond.maturity_date.replace(',', '.')
-                if num not in portfolio:
-                    portfolio[num] = {
-                        'bond_number': num,
-                        'maturity_date': maturity,
-                        'total_quantity': 0,
-                        'total_amount': 0,
-                        'total_price': 0
-                    }
-                portfolio[num]['total_quantity'] += bond.quantity
-                portfolio[num]['total_amount'] += bond.total_amount
-                portfolio[num]['total_price'] += bond.price_per_unit * bond.quantity
-
-        # Розраховуємо середню ціну
-        portfolio_data = []
-        for num, data in portfolio.items():
-            portfolio_data.append({
-                'bond_number': num,
-                'maturity_date': data['maturity_date'],
-                'total_quantity': data['total_quantity'],
-                'avg_price': round(data['total_amount'] / data['total_quantity'], 2) if data['total_quantity'] > 0 else 0,
-                'total_amount': data['total_amount']
-        })
-        
-        # Експортуємо портфель
-        sheets_manager.export_bonds_portfolio(portfolio_data)
+        session.add(profit_record)
+        session.commit()
         
         session.close()
-        await query.edit_message_text("✅ Синхронізація завершена успішно!")
+        
+        await update.message.reply_text(
+            f"✅ Запис додано!\n\n"
+            f"📈 {context.user_data['bond_operation_type'].capitalize()}\n"
+            f"🔢 {context.user_data['bond_number']}\n"
+            f"💰 {context.user_data['total_amount']:.2f} грн"
+        )
+        
+        # Очищаємо контекст
+        context.user_data.clear()
+        
     except Exception as e:
-        logger.error(f"Sync error: {e}")
-        await query.edit_message_text(f"❌ Помилка: {str(e)}")
-
+        logger.error(f"Error saving bond: {e}")
+        await update.message.reply_text(f"❌ Помилка при збереженні: {str(e)}")
 
 async def show_bonds_list(update: Update, context: CallbackContext):
-    """Показати список ОВДП"""
+    """Показати список всіх записів ОВДП"""
     query = update.callback_query
     await query.answer()
     
@@ -563,18 +386,23 @@ async def show_bonds_list(update: Update, context: CallbackContext):
             return
         
         session = Session()
-        bonds = session.query(Bond).order_by(Bond.id.desc()).limit(20).all()
+        bonds = session.query(Bond).all()
         session.close()
         
         if not bonds:
-            await query.edit_message_text("📭 У вас ще немає записів ОВДП")
+            keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data='ovdp')]]
+            await query.edit_message_text(
+                "📭 Немає записів",
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
             return
         
-        text = "📋 *Останні 20 записів ОВДП:*\n\n"
-        for i, bond in enumerate(bonds, 1):
-            text += f"{i}. 📅 {bond.date} | {bond.operation_type} | 🏦 {bond.platform}\n"
-            text += f"   🔢 {bond.bond_number} грн | {bond.quantity} шт | {bond.total_amount} грн\n\n"
-
+        text = "📋 *Мої записи ОВДП*\n\n"
+        for bond in bonds:
+            text += f"📅 {bond.date} | "
+            text += f"{'🟢' if bond.operation_type == 'купівля' else '🔴'} {bond.operation_type}\n"
+            text += f"   🔢 {bond.bond_number} | 💰 {bond.total_amount:.2f} грн | {bond.platform}\n\n"
+        
         keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data='ovdp')]]
         await query.edit_message_text(
             text,
@@ -586,7 +414,7 @@ async def show_bonds_list(update: Update, context: CallbackContext):
         await query.edit_message_text(f"❌ Помилка: {str(e)}")
 
 async def show_bonds_portfolio(update: Update, context: CallbackContext, platform=None):
-    """Показати портфель ОВДП (опціонально з фільтром по платформі)"""
+    """Показати портфель облігацій"""
     query = update.callback_query
     await query.answer()
     
@@ -596,46 +424,48 @@ async def show_bonds_portfolio(update: Update, context: CallbackContext, platfor
             return
         
         session = Session()
-        bonds = session.query(Bond).all()
+        bonds = session.query(Bond).filter(Bond.operation_type == 'купівля').all()
         session.close()
         
-        if not bonds:
-            await query.edit_message_text("📭 У вас ще немає записів ОВДП")
-            return
-        
-        # Фільтруємо по платформі
-        filtered_bonds = bonds
-        platform_name = "Всі"
-        if platform:
-            filtered_bonds = [b for b in bonds if b.platform.upper() == platform.upper()]
-                    # Тимчасове логування
-            logger.info(f"=== Фільтр по платформі: {platform} ===")
-            for b in bonds:
-                logger.info(f"Bond: {b.bond_number}, platform: '{b.platform}'")
-            logger.info(f"Знайдено після фільтра: {len(filtered_bonds)}")
-            platform_name = platform
-        
-        if not filtered_bonds:
-            await query.edit_message_text(f"📭 Немає записів для платформи {platform_name}")
-            return
-        
-        # Розраховуємо портфель (тільки купівлі)
+        # Формуємо портфель (купівлі - продажі по кожній облігації)
         portfolio = {}
-        for bond in filtered_bonds:
+        
+        session = Session()
+        all_bonds = session.query(Bond).all()
+        
+        for bond in all_bonds:
+            if bond.bond_number not in portfolio:
+                portfolio[bond.bond_number] = {
+                    'maturity_date': bond.maturity_date,
+                    'total_quantity': 0,
+                    'total_amount': 0,
+                    'platform': bond.platform
+                }
+            
             if bond.operation_type == 'купівля':
-                num = bond.bond_number
-                if num not in portfolio:
-                    portfolio[num] = {
-                        'bond_number': num,
-                        'maturity_date': bond.maturity_date,
-                        'total_quantity': 0,
-                        'total_amount': 0
-                    }
-                portfolio[num]['total_quantity'] += bond.quantity
-                portfolio[num]['total_amount'] += bond.total_amount
+                portfolio[bond.bond_number]['total_quantity'] += bond.quantity
+                portfolio[bond.bond_number]['total_amount'] += bond.total_amount
+            else:
+                portfolio[bond.bond_number]['total_quantity'] -= bond.quantity
+                portfolio[bond.bond_number]['total_amount'] -= bond.total_amount
+        
+        # Видаляємо облігації з нульовою кількістю
+        portfolio = {k: v for k, v in portfolio.items() if v['total_quantity'] > 0}
+        
+        # Фільтруємо по платформі, якщо потрібно
+        if platform:
+            platform_name = platform.upper()
+            portfolio = {k: v for k, v in portfolio.items() if v['platform'].upper() == platform_name}
+        
+        session.close()
         
         if not portfolio:
-            keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data='ovdp_portfolio')]]
+            keyboard = [
+                [InlineKeyboardButton("🏦 ICU", callback_data='portfolio_icu'),
+                 InlineKeyboardButton("🏦 SENSBANK", callback_data='portfolio_sensbank')],
+                [InlineKeyboardButton("🔙 Назад", callback_data='ovdp')]
+            ]
+            platform_name = platform.upper() if platform else ''
             await query.edit_message_text(
                 f"📭 Немає куплених ОВДП для платформи {platform_name}",
                 reply_markup=InlineKeyboardMarkup(keyboard)
@@ -645,7 +475,7 @@ async def show_bonds_portfolio(update: Update, context: CallbackContext, platfor
         # Формуємо текст
         title = f"💼 *Портфель ОВДП*"
         if platform:
-            title += f" - {platform_name}"
+            title += f" - {platform.upper()}"
         text = f"{title}\n\n"
         total_invested = 0
         total_quantity = 0
@@ -744,32 +574,35 @@ async def show_bonds_stats(update: Update, context: CallbackContext):
             # Динаміка прибутку по місяцях
             month = bond.date[:7] if len(bond.date) >= 7 else bond.date
             if month not in monthly_profit:
-                monthly_profit[month] = 0
+                monthly_profit[month] = {'buy': 0, 'sell': 0}
             if bond.operation_type == 'купівля':
-                monthly_profit[month] -= amount
+                monthly_profit[month]['buy'] += amount
             else:
-                monthly_profit[month] += amount
+                monthly_profit[month]['sell'] += amount
         
         current_portfolio = total_buy - total_sell
-        total_profit = total_sell - total_buy
+        realized_profit = total_sell - total_buy
         
         # Формуємо текст
         text = "📊 *Статистика ОВДП*\n\n"
         
-        text += f"   Вартість ОВДП: {current_portfolio:.0f} грн\n"
+        text += "💰 *Вартість ОВДП в портфелі:*\n"
+        text += f"   {current_portfolio:.0f} грн\n"
         text += f"   Кількість ОВДП: {total_quantity} шт\n\n"
         
         text += "🏦 *Інвестування по платформах:*\n"
         text += f"   ICU: {platform_stats['ICU']:.0f} грн\n"
         text += f"   SENSBANK: {platform_stats['SENSBANK']:.0f} грн\n\n"
         
-        text += "📈 *Загальний прибуток:*\n"
-        text += f"   {total_profit:.0f} грн\n\n"
+        text += "📈 *Реалізований прибуток:*\n"
+        text += f"   {realized_profit:.0f} грн\n\n"
         
-        text += "📊 *Динаміка прибутку по місяцях:*\n"
+        text += "📊 *Динаміка по місяцях:*\n"
         for month in sorted(monthly_profit.keys()):
-            profit = monthly_profit[month]
-            text += f"   {month}: {profit:.0f} грн\n"
+            buy = monthly_profit[month]['buy']
+            sell = monthly_profit[month]['sell']
+            profit = sell - buy
+            text += f"   {month}: Куп. {buy:.0f} грн | Прод. {sell:.0f} грн | Прибуток {profit:.0f} грн\n"
         text += "\n"
         
         # Найближчі виплати (з портфеля)
@@ -798,7 +631,7 @@ async def show_bonds_stats(update: Update, context: CallbackContext):
         
         if payments:
             for p in payments[:5]:  # Показуємо 5 найближчих
-                text += f"   {p['date'].strftime('%d.%m.%Y')} - {p['quantity']} шт\n"
+                text += f"   {p['date'].strftime('%d.%m.%Y')} - {p['quantity']} шт ({p['amount']:.0f} грн)\n"
         else:
             text += "   Немає майбутніх виплат\n"
         
@@ -812,10 +645,145 @@ async def show_bonds_stats(update: Update, context: CallbackContext):
     except Exception as e:
         await query.edit_message_text(f"❌ Помилка: {str(e)}")
 
+async def show_profit_menu(update: Update, context: CallbackContext):
+    """Меню управління прибутками"""
+    query = update.callback_query
+    await query.answer()
+    
+    try:
+        if not Session:
+            await query.edit_message_text("❌ Помилка підключення до бази даних")
+            return
+        
+        session = Session()
+        bonds = session.query(Bond).all()
+        session.close()
+        
+        # Розраховуємо прибутки
+        total_buy = 0
+        total_sell = 0
+        
+        for bond in bonds:
+            if bond.operation_type == 'купівля':
+                total_buy += bond.total_amount
+            else:
+                total_sell += bond.total_amount
+        
+        realized_profit = total_sell - total_buy
+        
+        # Отримуємо списаний прибуток
+        session = Session()
+        profit_records = session.query(ProfitRecord).all()
+        session.close()
+        
+        total_written_off = 0
+        for record in profit_records:
+            total_written_off += record.unrealized_profit
+        
+        unrealized_profit = realized_profit - total_written_off
+        
+        text = f"💰 *Управління прибутками*\n\n"
+        text += f"📈 Реалізований прибуток: {realized_profit:.0f} грн\n"
+        text += f"📋 Нереалізований прибуток: {unrealized_profit:.0f} грн\n"
+        text += f"✅ Списаний прибуток: {total_written_off:.0f} грн\n\n"
+        
+        keyboard = [
+            [InlineKeyboardButton("✍️ Списати прибуток", callback_data='write_off_profit')],
+            [InlineKeyboardButton("🔙 Назад", callback_data='ovdp')]
+        ]
+        
+        await query.edit_message_text(
+            text,
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode='Markdown'
+        )
+        
+    except Exception as e:
+        await query.edit_message_text(f"❌ Помилка: {str(e)}")
+
+async def sync_bonds_to_sheets(update: Update, context: CallbackContext):
+    """Синхронізація облігацій в Google Sheets"""
+    query = update.callback_query
+    await query.answer()
+    
+    try:
+        if not sheets_manager or not Session:
+            await query.edit_message_text("❌ Помилка: Google Sheets або БД не доступні")
+            return
+        
+        session = Session()
+        bonds = session.query(Bond).all()
+        session.close()
+        
+        if not bonds:
+            await query.edit_message_text("📭 Немає даних для синхронізації")
+            return
+        
+        # Готуємо дані
+        bonds_data = []
+        for bond in bonds:
+            bonds_data.append({
+                'date': bond.date,
+                'operation_type': bond.operation_type,
+                'bond_number': bond.bond_number,
+                'maturity_date': bond.maturity_date,
+                'price_per_unit': bond.price_per_unit,
+                'quantity': bond.quantity,
+                'total_amount': bond.total_amount,
+                'platform': bond.platform
+            })
+        
+        # Експортуємо в Google Sheets
+        sheets_manager.export_bonds_to_sheets(bonds_data)
+        
+        # Готуємо портфель
+        portfolio = {}
+        for bond in bonds:
+            if bond.bond_number not in portfolio:
+                portfolio[bond.bond_number] = {
+                    'maturity_date': bond.maturity_date,
+                    'total_quantity': 0,
+                    'total_amount': 0
+                }
+            
+            if bond.operation_type == 'купівля':
+                portfolio[bond.bond_number]['total_quantity'] += bond.quantity
+                portfolio[bond.bond_number]['total_amount'] += bond.total_amount
+            else:
+                portfolio[bond.bond_number]['total_quantity'] -= bond.quantity
+                portfolio[bond.bond_number]['total_amount'] -= bond.total_amount
+        
+        portfolio = {k: v for k, v in portfolio.items() if v['total_quantity'] > 0}
+        
+        portfolio_data = []
+        for bond_num, data in portfolio.items():
+            avg_price = data['total_amount'] / data['total_quantity'] if data['total_quantity'] > 0 else 0
+            portfolio_data.append({
+                'bond_number': bond_num,
+                'maturity_date': data['maturity_date'],
+                'total_quantity': data['total_quantity'],
+                'avg_price': avg_price,
+                'total_amount': data['total_amount']
+            })
+        
+        sheets_manager.export_bonds_portfolio(portfolio_data)
+        
+        await query.edit_message_text(
+            f"✅ Синхронізовано!\n\n"
+            f"📋 Записів: {len(bonds_data)}\n"
+            f"💼 Облігацій в портфелі: {len(portfolio_data)}",
+            parse_mode='Markdown'
+        )
+        
+    except Exception as e:
+        logger.error(f"Error syncing: {e}")
+        await query.edit_message_text(f"❌ Помилка синхронізації: {str(e)}")
+
 def main():
     app = Application.builder().token(BOT_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(button_handler))
+    app.add_handler(CallbackQueryHandler(button_platform_handler))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     
     logger.info("Бот запущений...")

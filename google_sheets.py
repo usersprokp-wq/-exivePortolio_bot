@@ -102,3 +102,32 @@ class GoogleSheetsManager:
         except Exception as e:
             logger.error(f"Error exporting portfolio to sheets: {e}")
             raise
+    
+    def export_profit_to_sheets(self, profit_data):
+        """Експортує дані про прибуток в Google Sheets (вкладка ОВДП-Прибуток)"""
+        try:
+            worksheet = self.get_or_create_worksheet("ОВДП-Прибуток")
+            worksheet.clear()
+            
+            if not profit_data:
+                return
+            
+            headers = ['Дата операції', 'Тип операції', 'Сума операції', 
+                      'Реалізований прибуток', 'Нереалізований прибуток']
+            worksheet.append_row(headers)
+            
+            for record in profit_data:
+                row = [
+                    record.get('operation_date', ''),
+                    record.get('operation_type', ''),
+                    record.get('amount', ''),
+                    record.get('realized_profit', ''),
+                    record.get('unrealized_profit', '')
+                ]
+                worksheet.append_row(row)
+            
+            logger.info(f"Exported profit data to worksheet 'ОВДП-Прибуток'")
+            return True
+        except Exception as e:
+            logger.error(f"Error exporting profit to sheets: {e}")
+            raise
