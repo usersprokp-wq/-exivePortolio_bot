@@ -208,6 +208,11 @@ def calculate_profit_by_price(bonds):
     # Розраховуємо загальний прибуток
     total_profit = sum(stats['profit'] for stats in bond_stats.values())
     
+    logger.info(f"FIFO Profit calculation: total_profit={total_profit:.2f}, bonds_count={len(bond_stats)}")
+    for bond_num, stats in bond_stats.items():
+        if stats['profit'] != 0:
+            logger.info(f"  {bond_num}: profit={stats['profit']:.2f}, sales_count={len(stats['sales'])}")
+    
     return dict(bond_stats), total_profit
 
 
