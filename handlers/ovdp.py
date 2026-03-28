@@ -390,11 +390,11 @@ async def handle_message_ovdp(update: Update, context: CallbackContext):
         elif step == 'enter_amount':
             try:
                 write_off_amount = float(user_message)
-                unrealized_profit = context.user_data.get('unrealized_profit', 0)
+                realized_profit = context.user_data.get('realized_profit', 0)
                 
-                if write_off_amount > unrealized_profit:
+                if write_off_amount > realized_profit:
                     await update.message.reply_text(
-                        f"❌ Сума перевищує нереалізований прибуток ({unrealized_profit:.0f} грн)\n\n"
+                        f"❌ Сума перевищує реалізований прибуток ({realized_profit:.0f} грн)\n\n"
                         f"Введіть коректну суму:"
                     )
                     return
@@ -413,14 +413,14 @@ async def handle_message_ovdp(update: Update, context: CallbackContext):
                     operation_date=datetime.now().strftime('%d.%m.%Y'),
                     operation_type='списання',
                     amount=0,
-                    realized_profit=0,
-                    unrealized_profit=write_off_amount
+                    realized_profit=write_off_amount,
+                    unrealized_profit=0
                 )
                 session.add(profit_record)
                 session.commit()
                 session.close()
                 
-                remaining_profit = unrealized_profit - write_off_amount
+                remaining_profit = realized_profit - write_off_amount
                 text = f"✅ *Оновлено!*\n\n"
                 text += f"📝 Списано: {write_off_amount:.0f} грн\n"
                 text += f"📋 Залишок: {remaining_profit:.0f} грн"
@@ -437,7 +437,7 @@ async def handle_message_ovdp(update: Update, context: CallbackContext):
                 )
                 
                 context.user_data.pop('profit_step', None)
-                context.user_data.pop('unrealized_profit', None)
+                context.user_data.pop('realized_profit', None)
                 
             except ValueError:
                 await update.message.reply_text("❌ Будь ласка, введіть коректне число")
@@ -777,8 +777,24 @@ async def show_profit_menu(update: Update, context: CallbackContext):
         # Розраховуємо РЕАЛІЗОВАНИЙ прибуток (від проданих)
         bond_stats, realized_profit = calculate_profit_by_price(bonds)
         
+        # Отримуємо списаний прибуток
+        session = Session()
+        profit_records = session.query(ProfitRecord).filter(ProfitRecord.realized_profit > 0).all()
+        session.close()
+        
+        total_written_off = 0
+        for record in profit_records:
+            total_written_off += record.realized_profit
+        
+        # Чистий реалізований прибуток = загальний мінус списаний
+        net_realized_profit = realized_profit - total_written_off
+        if net_realized_profit < 0:
+            net_realized_profit = 0
+        
         text = f"💰 *Управління прибутками*\n\n"
-        text += f"📈 Реалізований прибуток: {realized_profit:.0f} грн\n\n"
+        text += f"📈 Реалізований прибуток: {realized_profit:.0f} грн\n"
+        text += f"📋 Уже списано: {total_written_off:.0f} грн\n"
+        text += f"✅ Доступний для списання: {net_realized_profit:.0f} грн\n\n"
         
         keyboard = [
             [InlineKeyboardButton("✍️ Списати прибуток", callback_data='write_off_profit')],
@@ -815,10 +831,26 @@ async def write_off_profit_menu(update: Update, context: CallbackContext):
         # Розраховуємо РЕАЛІЗОВАНИЙ прибуток
         bond_stats, realized_profit = calculate_profit_by_price(bonds)
         
-        context.user_data['realized_profit'] = realized_profit
+        # Отримуємо списаний прибуток
+        session = Session()
+        profit_records = session.query(ProfitRecord).filter(ProfitRecord.realized_profit > 0).all()
+        session.close()
+        
+        total_written_off = 0
+        for record in profit_records:
+            total_written_off += record.realized_profit
+        
+        # Чистий реалізований прибуток = загальний мінус списаний
+        net_realized_profit = realized_profit - total_written_off
+        if net_realized_profit < 0:
+            net_realized_profit = 0
+        
+        context.user_data['realized_profit'] = net_realized_profit
         
         text = f"💰 *Списання реалізованого прибутку*\n\n"
-        text += f"📈 Реалізований прибуток: *{realized_profit:.0f} грн*\n\n"
+        text += f"📈 Загальний реалізований прибуток: {realized_profit:.0f} грн\n"
+        text += f"📋 Уже списано: {total_written_off:.0f} грн\n"
+        text += f"✅ Доступний для списання: *{net_realized_profit:.0f} грн*\n\n"
         
         if realized_profit > 0:
             keyboard = [
