@@ -1,5 +1,4 @@
 import logging
-import os
 from datetime import datetime, timedelta
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import CallbackContext
@@ -9,34 +8,61 @@ from models import Bond, ProfitRecord
 logger = logging.getLogger(__name__)
 
 
-def calculate_profit_by_bond(bonds):
+def calculate_profit_by_price(bonds):
     """
-    Розраховує прибуток по кожному bond_number окремо
-    Прибуток = сума продажів - сума купівель для кожного номера
+    Розраховує прибуток по кожному bond_number окремо.
+    
+    Логіка:
+    1. Знаходимо середню ціну купівлі для кожного номера
+    2. Для кожної продажі: прибуток = (price_sell - avg_price_buy) * quantity_sell
+    3. Загальний прибуток = сума всіх прибутків від продажів
     """
     bond_stats = {}
     
+    # Спочатку збираємо всі купівлі по bond_number
     for bond in bonds:
         bond_num = bond.bond_number
         
         if bond_num not in bond_stats:
             bond_stats[bond_num] = {
-                'buy_amount': 0,
-                'sell_amount': 0,
+                'buy_total_amount': 0,
+                'buy_total_quantity': 0,
+                'avg_price_buy': 0,
+                'sales': [],
                 'profit': 0
             }
         
         if bond.operation_type == 'купівля':
-            bond_stats[bond_num]['buy_amount'] += bond.total_amount
-        else:  # продаж
-            bond_stats[bond_num]['sell_amount'] += bond.total_amount
+            bond_stats[bond_num]['buy_total_amount'] += bond.total_amount
+            bond_stats[bond_num]['buy_total_quantity'] += bond.quantity
     
-    # Розраховуємо прибуток для кожного облігаціонного номера
-    total_profit = 0
+    # Розраховуємо середню ціну купівлі для кожного номера
     for bond_num, stats in bond_stats.items():
-        profit = stats['sell_amount'] - stats['buy_amount']
-        bond_stats[bond_num]['profit'] = profit
-        total_profit += profit
+        if stats['buy_total_quantity'] > 0:
+            stats['avg_price_buy'] = stats['buy_total_amount'] / stats['buy_total_quantity']
+    
+    # Обробляємо продажі
+    for bond in bonds:
+        if bond.operation_type == 'продаж':
+            bond_num = bond.bond_number
+            avg_price = bond_stats[bond_num]['avg_price_buy']
+            
+            # Прибуток на одну облігацію
+            profit_per_unit = bond.price_per_unit - avg_price
+            
+            # Загальний прибуток від цієї продажі
+            total_profit = profit_per_unit * bond.quantity
+            
+            bond_stats[bond_num]['sales'].append({
+                'quantity': bond.quantity,
+                'price_per_unit': bond.price_per_unit,
+                'profit': total_profit
+            })
+            
+            bond_stats[bond_num]['profit'] += total_profit
+    
+    # Розраховуємо загальний прибуток
+    total_profit = sum(stats['profit'] for stats in bond_stats.values())
     
     return bond_stats, total_profit
 
@@ -496,8 +522,8 @@ async def show_bonds_stats(update: Update, context: CallbackContext):
         
         current_portfolio = total_buy - total_sell
         
-        # Розраховуємо прибуток по bond_number
-        bond_stats, realized_profit = calculate_profit_by_bond(bonds)
+        # Розраховуємо прибуток по ціні
+        bond_stats, realized_profit = calculate_profit_by_price(bonds)
         
         text = "📊 *Статистика ОВДП*\n\n"
         text += "💰 *Вартість ОВДП в портфелі:*\n"
@@ -513,11 +539,7 @@ async def show_bonds_stats(update: Update, context: CallbackContext):
         for month in sorted(monthly_profit.keys()):
             buy = monthly_profit[month]['buy']
             sell = monthly_profit[month]['sell']
-            if sell == 0:
-                profit = 0
-            else:
-                profit = sell - buy
-            text += f"   {month}: Куп. {buy:.0f} грн | Прод. {sell:.0f} грн | Прибуток {profit:.0f} грн\n"
+            text += f"   {month}: Куп. {buy:.0f} грн | Прод. {sell:.0f} грн\n"
         text += "\n"
         
         text += "💸 *Найближчі виплати:*\n"
@@ -571,8 +593,8 @@ async def show_profit_menu(update: Update, context: CallbackContext):
             await query.edit_message_text("📭 Немає даних про ОВДП")
             return
         
-        # Розраховуємо прибуток по bond_number
-        bond_stats, total_profit = calculate_profit_by_bond(bonds)
+        # Розраховуємо прибуток по ціні
+        bond_stats, total_profit = calculate_profit_by_price(bonds)
         
         # Отримуємо списаний прибуток
         session = Session()
@@ -583,7 +605,6 @@ async def show_profit_menu(update: Update, context: CallbackContext):
         for record in profit_records:
             total_written_off += record.unrealized_profit
         
-        # Нереалізований прибуток = прибуток мінус списаний
         unrealized_profit = total_profit - total_written_off
         if unrealized_profit < 0:
             unrealized_profit = 0
@@ -623,8 +644,8 @@ async def write_off_profit_menu(update: Update, context: CallbackContext):
             await query.edit_message_text("📭 Немає даних про ОВДП")
             return
         
-        # Розраховуємо прибуток по bond_number
-        bond_stats, total_profit = calculate_profit_by_bond(bonds)
+        # Розраховуємо прибуток по ціні
+        bond_stats, total_profit = calculate_profit_by_price(bonds)
         
         session = Session()
         profit_records = session.query(ProfitRecord).filter(ProfitRecord.unrealized_profit > 0).all()
