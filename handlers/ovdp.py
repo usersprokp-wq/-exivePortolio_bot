@@ -629,6 +629,8 @@ async def write_off_profit_menu(update: Update, context: CallbackContext):
     query = update.callback_query
     await query.answer()
     
+    logger.info("write_off_profit_menu called")
+    
     try:
         Session = context.bot_data.get('Session')
         if not Session:
@@ -661,7 +663,7 @@ async def write_off_profit_menu(update: Update, context: CallbackContext):
         context.user_data['unrealized_profit'] = unrealized_profit
         
         text = f"💰 *Списання прибутку*\n\n"
-        text += f"📋 Не списаний прибуток: *{unrealized_profit:.0f} грн*\n\n"
+        text += f"📋 Нереалізований прибуток: *{unrealized_profit:.0f} грн*\n\n"
         
         if unrealized_profit > 0:
             keyboard = [
