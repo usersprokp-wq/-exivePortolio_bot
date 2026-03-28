@@ -8,6 +8,61 @@ from models import Bond, ProfitRecord
 logger = logging.getLogger(__name__)
 
 
+def calculate_monthly_profit(bonds):
+    """
+    Розраховує прибуток по місяцях
+    Повертає словник {месяц: прибуток}
+    """
+    monthly_profit = {}
+    
+    # Розраховуємо середню ціну купівлі для кожного номера
+    bond_avg_prices = {}
+    for bond in bonds:
+        bond_num = bond.bond_number
+        if bond_num not in bond_avg_prices:
+            bond_avg_prices[bond_num] = {
+                'buy_total': 0,
+                'buy_quantity': 0
+            }
+        
+        if bond.operation_type == 'купівля':
+            bond_avg_prices[bond_num]['buy_total'] += bond.total_amount
+            bond_avg_prices[bond_num]['buy_quantity'] += bond.quantity
+    
+    # Розраховуємо середню ціну для кожного номера
+    for bond_num in bond_avg_prices:
+        if bond_avg_prices[bond_num]['buy_quantity'] > 0:
+            bond_avg_prices[bond_num]['avg_price'] = (
+                bond_avg_prices[bond_num]['buy_total'] / 
+                bond_avg_prices[bond_num]['buy_quantity']
+            )
+        else:
+            bond_avg_prices[bond_num]['avg_price'] = 0
+    
+    # Обробляємо продажі по місяцях
+    for bond in bonds:
+        if bond.operation_type == 'продаж':
+            # Витягуємо місяць з дати (формат ДД.ММ.РРРР -> ММ.РРРР)
+            date_parts = bond.date.split('.')
+            if len(date_parts) >= 2:
+                month_year = f"{date_parts[1]}.{date_parts[2]}"
+            else:
+                month_year = bond.date
+            
+            if month_year not in monthly_profit:
+                monthly_profit[month_year] = 0
+            
+            # Розраховуємо прибуток
+            bond_num = bond.bond_number
+            avg_price = bond_avg_prices[bond_num]['avg_price']
+            profit_per_unit = bond.price_per_unit - avg_price
+            total_profit = profit_per_unit * bond.quantity
+            
+            monthly_profit[month_year] += total_profit
+    
+    return monthly_profit
+
+
 def calculate_profit_by_price(bonds):
     """
     Розраховує прибуток по кожному bond_number окремо.
@@ -534,12 +589,17 @@ async def show_bonds_stats(update: Update, context: CallbackContext):
         text += f"   SENSBANK: {platform_stats['SENSBANK']:.0f} грн\n\n"
         text += "📈 *Реалізований прибуток:*\n"
         text += f"   {realized_profit:.0f} грн\n\n"
-        text += "📊 *Динаміка по місяцях:*\n"
+        text += "📊 *Динаміка прибутку по місяцях:*\n"
         
-        for month in sorted(monthly_profit.keys()):
-            buy = monthly_profit[month]['buy']
-            sell = monthly_profit[month]['sell']
-            text += f"   {month}: Куп. {buy:.0f} грн | Прод. {sell:.0f} грн\n"
+        # Розраховуємо прибуток по місяцях
+        monthly_profits = calculate_monthly_profit(bonds)
+        
+        if monthly_profits:
+            for month in sorted(monthly_profits.keys()):
+                profit = monthly_profits[month]
+                text += f"   {month} - {profit:.0f} грн\n"
+        else:
+            text += "   Нема продажів\n"
         text += "\n"
         
         text += "💸 *Найближчі виплати:*\n"
