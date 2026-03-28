@@ -674,7 +674,11 @@ async def show_bonds_stats(update: Update, context: CallbackContext):
                 portfolio_by_bond[bond.bond_number]['quantity'] -= bond.quantity
                 portfolio_by_bond[bond.bond_number]['total_amount'] -= amount
         
-        current_portfolio = total_buy - total_sell
+        # Розраховуємо вартість портфеля - сума усіх облігацій що залишилися (після продажів)
+        current_portfolio = 0
+        for bond_num, data in portfolio_by_bond.items():
+            if data['quantity'] > 0:  # Тільки облігації що ще в портфелі
+                current_portfolio += data['total_amount']
         
         # Розраховуємо прибуток по ціні
         bond_stats, realized_profit = calculate_profit_by_price(bonds)
