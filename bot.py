@@ -662,12 +662,21 @@ async def show_bonds_portfolio(update: Update, context: CallbackContext, platfor
         text += f"📊 *Всього облігацій:* {total_quantity} шт"
         
         # Додаємо кнопки фільтрації
-        keyboard = [
-            [InlineKeyboardButton("🏦 Всі", callback_data='ovdp_portfolio'),
-             InlineKeyboardButton("🏦 ICU", callback_data='portfolio_icu'),
-             InlineKeyboardButton("🏦 SENSBANK", callback_data='portfolio_sensbank')],
-            [InlineKeyboardButton("🔙 Назад", callback_data='ovdp')]
-        ]
+        if platform:
+            # Якщо фільтр активний - показуємо кнопку "Всі"
+            keyboard = [
+                [InlineKeyboardButton("🏦 Всі", callback_data='ovdp_portfolio'),
+                 InlineKeyboardButton("🏦 ICU", callback_data='portfolio_icu'),
+                 InlineKeyboardButton("🏦 SENSBANK", callback_data='portfolio_sensbank')],
+                [InlineKeyboardButton("🔙 Назад", callback_data='ovdp')]
+            ]
+        else:
+            # Якщо фільтр не активний - показуємо тільки ICU та SENSBANK
+            keyboard = [
+                [InlineKeyboardButton("🏦 ICU", callback_data='portfolio_icu'),
+                 InlineKeyboardButton("🏦 SENSBANK", callback_data='portfolio_sensbank')],
+                [InlineKeyboardButton("🔙 Назад", callback_data='ovdp')]
+            ]
         await query.edit_message_text(
             text,
             reply_markup=InlineKeyboardMarkup(keyboard),
