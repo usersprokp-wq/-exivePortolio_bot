@@ -165,46 +165,54 @@ def calculate_profit_by_price(bonds):
             })
         
         elif bond.operation_type == 'продаж':
-            # Продаємо з черги FIFO
-            remaining_quantity = bond.quantity
-            sale_profit = 0
+            # Продаємо по FIFO - списуємо перші за часом купівлі
+            remaining_to_sell = bond.quantity
+            cost_of_goods_sold = 0  # Собівартість (сума списаних купівель)
             sale_details = []
             
-            while remaining_quantity > 0 and bond_stats[bond_num]['buy_queue']:
+            # Списуємо купівлі з черги
+            while remaining_to_sell > 0 and bond_stats[bond_num]['buy_queue']:
                 buy = bond_stats[bond_num]['buy_queue'][0]
                 
                 # Скільки можемо продати з цієї купівлі
-                qty_to_sell = min(remaining_quantity, buy['quantity'])
+                qty_from_this_buy = min(remaining_to_sell, buy['quantity'])
                 
-                # Розраховуємо прибуток для цієї партії
-                profit_per_unit = bond.price_per_unit - buy['price']
-                partition_profit = profit_per_unit * qty_to_sell
-                sale_profit += partition_profit
+                # Собівартість цієї партії = ціна купівлі × кількість
+                partition_cost = qty_from_this_buy * buy['price']
+                cost_of_goods_sold += partition_cost
                 
                 sale_details.append({
                     'buy_date': buy['date'],
                     'buy_price': buy['price'],
-                    'quantity': qty_to_sell,
-                    'partition_profit': partition_profit
+                    'qty': qty_from_this_buy,
+                    'cost': partition_cost
                 })
                 
-                # Оновлюємо кількість в черзі
-                buy['quantity'] -= qty_to_sell
-                remaining_quantity -= qty_to_sell
+                # Оновлюємо залишок в черзі
+                buy['quantity'] -= qty_from_this_buy
+                remaining_to_sell -= qty_from_this_buy
                 
-                # Якщо купівля повністю продана - видаляємо з черги
+                # Видаляємо купівлю якщо вона повністю продана
                 if buy['quantity'] == 0:
                     bond_stats[bond_num]['buy_queue'].popleft()
             
+            # Розраховуємо прибуток для цього продажу
+            # Прибуток = Сума продажу − Собівартість
+            sale_revenue = bond.quantity * bond.price_per_unit
+            profit = sale_revenue - cost_of_goods_sold
+            
             bond_stats[bond_num]['sales'].append({
-                'sell_date': bond.date,
-                'quantity': bond.quantity,
-                'sell_price': bond.price_per_unit,
-                'profit': sale_profit,
-                'details': sale_details
+                'date': bond.date,
+                'qty': bond.quantity,
+                'price': bond.price_per_unit,
+                'revenue': sale_revenue,
+                'cost': cost_of_goods_sold,
+                'profit': profit,
+                'details': sale_details,
+                'row_order': bond.row_order
             })
             
-            bond_stats[bond_num]['profit'] += sale_profit
+            bond_stats[bond_num]['profit'] += profit
     
     # Розраховуємо загальний прибуток
     total_profit = sum(stats['profit'] for stats in bond_stats.values())
