@@ -540,7 +540,6 @@ async def show_bonds_stats(update: Update, context: CallbackContext):
         total_buy = 0
         total_sell = 0
         total_quantity = 0
-        platform_stats = {'ICU': 0, 'SENSBANK': 0}
         monthly_profit = {}
         portfolio_by_bond = {}
         
@@ -559,13 +558,6 @@ async def show_bonds_stats(update: Update, context: CallbackContext):
                 portfolio_by_bond[bond.bond_number]['total_amount'] += amount
             else:
                 total_sell += amount
-            
-            platform = bond.platform.upper()
-            if bond.operation_type == 'купівля':
-                if platform == 'ICU':
-                    platform_stats['ICU'] += amount
-                elif platform == 'SENSBANK':
-                    platform_stats['SENSBANK'] += amount
             
             month = bond.date[:7] if len(bond.date) >= 7 else bond.date
             if month not in monthly_profit:
