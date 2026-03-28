@@ -894,6 +894,8 @@ async def sync_bonds_from_sheets(update: Update, context: CallbackContext):
         session = Session()
         db_bonds = session.query(Bond).all()
         
+        logger.info(f"DEBUG: db_bonds loaded, count = {len(db_bonds)}")
+        
         # Створюємо словники для порівняння
         excel_keys = set()
         excel_data_by_key = {}
