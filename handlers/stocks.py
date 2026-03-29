@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import CallbackContext
 
-from models import Stock
+from models import Stock, StockPortfolio
 
 logger = logging.getLogger(__name__)
 
@@ -185,7 +185,7 @@ async def handle_calendar_navigation(update: Update, context: CallbackContext):
 
 
 async def save_stock(update: Update, context: CallbackContext):
-    """Зберігає акцію в базу даних"""
+    """Зберігає акцію в базу даних та оновлює портфель"""
     try:
         Session = context.bot_data.get('Session')
         if not Session:
@@ -207,6 +207,47 @@ async def save_stock(update: Update, context: CallbackContext):
             platform=context.user_data['platform']
         )
         session.add(stock)
+        session.commit()
+        
+        # Оновлюємо портфель
+        ticker = context.user_data['ticker']
+        platform = context.user_data['platform']
+        operation_type = context.user_data['stock_operation_type']
+        quantity = context.user_data['quantity']
+        total_amount = context.user_data['total_amount']
+        
+        # Отримуємо або створюємо запис портфеля
+        portfolio = session.query(StockPortfolio).filter(StockPortfolio.ticker == ticker).first()
+        
+        if not portfolio:
+            # Нова позиція
+            if operation_type == 'купівля':
+                portfolio = StockPortfolio(
+                    ticker=ticker,
+                    total_quantity=quantity,
+                    total_amount=total_amount,
+                    avg_price=total_amount / quantity if quantity > 0 else 0,
+                    platform=platform,
+                    last_update=datetime.now().isoformat()
+                )
+                session.add(portfolio)
+            # Якщо продаж а позиції нема - ігноруємо
+        else:
+            # Існуюча позиція
+            if operation_type == 'купівля':
+                portfolio.total_quantity += quantity
+                portfolio.total_amount += total_amount
+            else:  # продаж
+                portfolio.total_quantity -= quantity
+                portfolio.total_amount -= total_amount
+            
+            # Якщо кількість <= 0 - видаляємо позицію
+            if portfolio.total_quantity <= 0:
+                session.delete(portfolio)
+            else:
+                portfolio.avg_price = portfolio.total_amount / portfolio.total_quantity if portfolio.total_quantity > 0 else 0
+                portfolio.last_update = datetime.now().isoformat()
+        
         session.commit()
         session.close()
         
@@ -319,7 +360,10 @@ async def show_stocks_portfolio(update: Update, context: CallbackContext, platfo
                     [InlineKeyboardButton("📊 FF", callback_data='portfolio_ff'), InlineKeyboardButton("📊 IB", callback_data='portfolio_ib')],
                     [InlineKeyboardButton("🔙 Назад", callback_data='stocks')]
                 ]
-                await query.edit_message_text(f"📭 Немає акцій на біржі {platform}", reply_markup=InlineKeyboardMarkup(keyboard))
+                try:
+                    await query.edit_message_text(f"📭 Немає акцій на біржі {platform}", reply_markup=InlineKeyboardMarkup(keyboard))
+                except Exception as e:
+                    logger.error(f"Error editing message: {e}")
                 return
         
         # Сортуємо по даті (новіші зверху)
