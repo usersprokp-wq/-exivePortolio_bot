@@ -84,7 +84,7 @@ def main():
     app.add_handler(CommandHandler("start", start))
     
     # ОВДП обробники (перед спільними, бо більш специфічні)
-    app.add_handler(CallbackQueryHandler(button_handler_ovdp, pattern=r'^(ovdp|bond_|date_|platform_|portfolio_|write_off|confirm_write_off|pnl_portfolio)'))
+    app.add_handler(CallbackQueryHandler(button_handler_ovdp, pattern=r'^(ovdp|bond_|date_|platform_|portfolio_|write_off|confirm_write_off|pnl_portfolio|bonds_list_page_|sync_sheets_to_db)'))
     
     # Головне меню та спільні функції (загальні кнопки)
     app.add_handler(CallbackQueryHandler(button_handler_main, pattern=r'^(back_to_menu|analysis|sync|stocks|deposit|crypto|numismatics)'))

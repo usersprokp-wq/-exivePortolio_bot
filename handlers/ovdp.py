@@ -519,8 +519,8 @@ async def show_bonds_list(update: Update, context: CallbackContext, page=1):
             return
         
         session = Session()
-        # Сортуємо по row_order для правильного порядку
-        bonds = session.query(Bond).order_by(Bond.row_order).all()
+        # Сортуємо по row_order в ЗВОРОТНОМУ порядку (найновіші спочатку)
+        bonds = session.query(Bond).order_by(Bond.row_order.desc()).all()
         session.close()
         
         if not bonds:
