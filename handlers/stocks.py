@@ -418,10 +418,12 @@ async def show_stocks_portfolio(update: Update, context: CallbackContext, platfo
         try:
             await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
         except Exception as e:
-            if "not modified" in str(e).lower():
-                await query.answer("📋 Той же портфель", show_alert=False)
+            error_msg = str(e).lower()
+            if "not modified" in error_msg or "400" in error_msg:
+                await query.answer(f"📊 Портфель: {len(portfolio_records)} акцій на {platform}", show_alert=False)
             else:
-                await query.edit_message_text(f"❌ Помилка: {str(e)}")
+                logger.error(f"Edit error: {e}")
+                await query.answer("❌ Помилка оновлення", show_alert=True)
         
     except Exception as e:
         await query.edit_message_text(f"❌ Помилка: {str(e)}")
