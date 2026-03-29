@@ -236,6 +236,9 @@ async def button_handler_ovdp(update: Update, context: CallbackContext):
         await start_bond_add(update, context)
     elif query.data == 'ovdp_list':
         await show_bonds_list(update, context)
+    elif query.data.startswith('bonds_list_page_'):
+        page = int(query.data.replace('bonds_list_page_', ''))
+        await show_bonds_list(update, context, page=page)
     elif query.data == 'ovdp_portfolio':
         await show_bonds_portfolio(update, context, platform=None)
     elif query.data == 'ovdp_stats':
@@ -504,8 +507,8 @@ async def save_bond(update: Update, context: CallbackContext):
         await update.callback_query.edit_message_text(f"❌ Помилка при збереженні: {str(e)}")
 
 
-async def show_bonds_list(update: Update, context: CallbackContext):
-    """Показати список всіх записів ОВДП"""
+async def show_bonds_list(update: Update, context: CallbackContext, page=1):
+    """Показати список записів ОВДП з пагінацією (по 10 на сторінку)"""
     query = update.callback_query
     await query.answer()
     
@@ -516,7 +519,8 @@ async def show_bonds_list(update: Update, context: CallbackContext):
             return
         
         session = Session()
-        bonds = session.query(Bond).all()
+        # Сортуємо по row_order для правильного порядку
+        bonds = session.query(Bond).order_by(Bond.row_order).all()
         session.close()
         
         if not bonds:
@@ -524,13 +528,43 @@ async def show_bonds_list(update: Update, context: CallbackContext):
             await query.edit_message_text("📭 Немає записів", reply_markup=InlineKeyboardMarkup(keyboard))
             return
         
-        text = "📋 *Мої записи ОВДП*\n\n"
-        for bond in bonds:
+        # Пагінація - по 10 записів на сторінку
+        records_per_page = 10
+        total_pages = (len(bonds) + records_per_page - 1) // records_per_page
+        
+        # Перевіряємо границі сторінки
+        if page < 1:
+            page = 1
+        if page > total_pages:
+            page = total_pages
+        
+        # Беремо записи для поточної сторінки
+        start_idx = (page - 1) * records_per_page
+        end_idx = start_idx + records_per_page
+        page_bonds = bonds[start_idx:end_idx]
+        
+        text = f"📋 *Мої записи ОВДП* (сторінка {page}/{total_pages})\n\n"
+        for bond in page_bonds:
             text += f"📅 {bond.date} | "
             text += f"{'🟢' if bond.operation_type == 'купівля' else '🔴'} {bond.operation_type}\n"
             text += f"   🔢 {bond.bond_number} | 💰 {bond.total_amount:.2f} грн | {bond.platform}\n\n"
         
-        keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data='ovdp')]]
+        # Будуємо кнопки пагінації
+        keyboard = []
+        
+        # Кнопки номерів сторінок
+        if total_pages > 1:
+            page_buttons = []
+            for p in range(1, total_pages + 1):
+                if p == page:
+                    page_buttons.append(InlineKeyboardButton(f"[{p}]", callback_data=f'bonds_list_page_{p}'))
+                else:
+                    page_buttons.append(InlineKeyboardButton(str(p), callback_data=f'bonds_list_page_{p}'))
+            keyboard.append(page_buttons)
+        
+        # Кнопка назад
+        keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data='ovdp')])
+        
         await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
         
     except Exception as e:
