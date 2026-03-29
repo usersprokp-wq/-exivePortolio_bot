@@ -41,9 +41,14 @@ async def button_handler_main(update: Update, context: CallbackContext):
         await show_ovdp_menu(update, context)
     
     elif query.data == 'stocks':
-        from handlers.stocks import show_stocks_menu
-        await show_stocks_menu(update, context)
-
+        text = "📊 *Акції*\n\nОберіть дію:"
+        keyboard = [
+            [InlineKeyboardButton("➕ Додати", callback_data='stocks_add')],
+            [InlineKeyboardButton("📋 Список", callback_data='stocks_list')],
+            [InlineKeyboardButton("🔙 Назад", callback_data='back_to_menu')]
+        ]
+        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+    
     elif query.data == 'deposit':
         text = "🏦 *Депозит*\n\nОберіть дію:"
         keyboard = [
@@ -79,20 +84,70 @@ async def button_handler_main(update: Update, context: CallbackContext):
         await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
     
     elif query.data == 'sync':
-        text = "🔄 *Синхронізація*\n\nОберіть напрямок:"
+        text = "🔄 *Синхронізація*\n\nОберіть розділ:"
         keyboard = [
-            [InlineKeyboardButton("📤 БД → Excel", callback_data='sync_db_to_sheets')],
-            [InlineKeyboardButton("📥 Excel → БД", callback_data='sync_sheets_to_db')],
+            [InlineKeyboardButton("📈 ОВДП", callback_data='sync_ovdp')],
+            [InlineKeyboardButton("📊 Акції", callback_data='sync_stocks')],
+            [InlineKeyboardButton("🏦 Депозит", callback_data='sync_deposit')],
+            [InlineKeyboardButton("₿ Крипто", callback_data='sync_crypto')],
+            [InlineKeyboardButton("🪙 Нумізматика", callback_data='sync_numismatics')],
             [InlineKeyboardButton("🔙 Назад", callback_data='back_to_menu')]
         ]
         await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
     
-    elif query.data == 'sync_db_to_sheets':
+    elif query.data == 'sync_ovdp':
+        text = "📈 *ОВДП - Синхронізація*\n\nОберіть напрямок:"
+        keyboard = [
+            [InlineKeyboardButton("📤 БД → Excel", callback_data='sync_ovdp_db_to_sheets')],
+            [InlineKeyboardButton("📥 Excel → БД", callback_data='sync_ovdp_sheets_to_db')],
+            [InlineKeyboardButton("🔙 Назад", callback_data='sync')]
+        ]
+        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+    
+    elif query.data == 'sync_stocks':
+        text = "📊 *Акції - Синхронізація*\n\nОберіть напрямок:"
+        keyboard = [
+            [InlineKeyboardButton("📤 БД → Excel", callback_data='sync_stocks_db_to_sheets')],
+            [InlineKeyboardButton("📥 Excel → БД", callback_data='sync_stocks_sheets_to_db')],
+            [InlineKeyboardButton("🔙 Назад", callback_data='sync')]
+        ]
+        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+    
+    elif query.data == 'sync_deposit':
+        text = "🏦 *Депозит - Синхронізація*\n\n(в розробці)"
+        keyboard = [
+            [InlineKeyboardButton("🔙 Назад", callback_data='sync')]
+        ]
+        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+    
+    elif query.data == 'sync_crypto':
+        text = "₿ *Крипто - Синхронізація*\n\n(в розробці)"
+        keyboard = [
+            [InlineKeyboardButton("🔙 Назад", callback_data='sync')]
+        ]
+        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+    
+    elif query.data == 'sync_numismatics':
+        text = "🪙 *Нумізматика - Синхронізація*\n\n(в розробці)"
+        keyboard = [
+            [InlineKeyboardButton("🔙 Назад", callback_data='sync')]
+        ]
+        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+    
+    elif query.data == 'sync_ovdp_db_to_sheets':
         await sync_bonds_to_sheets(update, context)
     
-    elif query.data == 'sync_sheets_to_db':
+    elif query.data == 'sync_ovdp_sheets_to_db':
         from handlers.ovdp import sync_bonds_from_sheets
         await sync_bonds_from_sheets(update, context)
+    
+    elif query.data == 'sync_stocks_db_to_sheets':
+        from handlers.stocks import sync_stocks_to_sheets
+        await sync_stocks_to_sheets(update, context)
+    
+    elif query.data == 'sync_stocks_sheets_to_db':
+        from handlers.stocks import sync_stocks_from_sheets
+        await sync_stocks_from_sheets(update, context)
     
     elif query.data == 'back_to_menu':
         await start(update, context)

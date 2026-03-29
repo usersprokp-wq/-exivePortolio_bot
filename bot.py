@@ -99,7 +99,7 @@ def main():
     app.add_handler(CallbackQueryHandler(button_handler_stocks, pattern=r'^(stocks|stocks_add|stocks_list|stocks_date_|stocks_portfolio|stocks_stats|stocks_profit|stocks_sync|stocks_sync_from_sheets|stocks_cal_|stock_buy|stock_sell|stock_platform_)'))
     
     # Головне меню та спільні функції (загальні кнопки)
-    app.add_handler(CallbackQueryHandler(button_handler_main, pattern=r'^(back_to_menu|analysis|sync|stocks|deposit|crypto|numismatics)'))
+    app.add_handler(CallbackQueryHandler(button_handler_main, pattern=r'^(back_to_menu|analysis|sync|sync_ovdp|sync_stocks|sync_deposit|sync_crypto|sync_numismatics|sync_ovdp_db_to_sheets|sync_ovdp_sheets_to_db|sync_stocks_db_to_sheets|sync_stocks_sheets_to_db|stocks|deposit|crypto|numismatics)'))
     
     # Обробка текстових повідомлень (об'єднана для всіх портфелів)
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message_unified))
