@@ -106,6 +106,8 @@ async def button_handler_stocks(update: Update, context: CallbackContext):
         await show_stocks_portfolio(update, context, platform='FF')
     elif query.data == 'portfolio_ib':
         await show_stocks_portfolio(update, context, platform='IB')
+    elif query.data == 'portfolio_all':
+        await show_stocks_portfolio(update, context, platform=None)
 
 
 async def show_stocks_menu(update: Update, context: CallbackContext):
@@ -411,16 +413,27 @@ async def show_stocks_portfolio(update: Update, context: CallbackContext, platfo
         text += f"━━━━━━━━━━━━━━━━━━━━\n"
         text += f"📊 *Всього інвестовано:* {total_invested:.2f} $"
         
-        keyboard = [
-            [InlineKeyboardButton("📊 FF", callback_data='portfolio_ff'), InlineKeyboardButton("📊 IB", callback_data='portfolio_ib')],
-            [InlineKeyboardButton("🔙 Назад", callback_data='stocks')]
-        ]
+        # Генеруємо кнопки в залежності від фільтру
+        if platform:
+            # Якщо вибрана біржа - показуємо "Всі акції" та іншу біржу
+            other_platform = 'IB' if platform == 'FF' else 'FF'
+            keyboard = [
+                [InlineKeyboardButton("📊 Всі акції", callback_data='portfolio_all'), InlineKeyboardButton(f"📊 {other_platform}", callback_data=f'portfolio_{other_platform.lower()}')],
+                [InlineKeyboardButton("🔙 Назад", callback_data='stocks')]
+            ]
+        else:
+            # Якщо показуємо всі - показуємо обидві біржі
+            keyboard = [
+                [InlineKeyboardButton("📊 FF", callback_data='portfolio_ff'), InlineKeyboardButton("📊 IB", callback_data='portfolio_ib')],
+                [InlineKeyboardButton("🔙 Назад", callback_data='stocks')]
+            ]
+        
         try:
             await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
         except Exception as e:
             error_msg = str(e).lower()
             if "not modified" in error_msg or "400" in error_msg:
-                await query.answer(f"📊 Портфель: {len(portfolio_records)} акцій на {platform}", show_alert=False)
+                await query.answer(f"📊 Портфель: {len(portfolio_records)} акцій" + (f" на {platform}" if platform else ""), show_alert=False)
             else:
                 logger.error(f"Edit error: {e}")
                 await query.answer("❌ Помилка оновлення", show_alert=True)
