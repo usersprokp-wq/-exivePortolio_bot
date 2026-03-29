@@ -209,10 +209,10 @@ async def save_stock(update: Update, context: CallbackContext):
             f"📅 Дата: {context.user_data['stock_date']}\n"
             f"📊 Операція: {context.user_data['stock_operation_type'].capitalize()}\n"
             f"📈 Тікер: {context.user_data['ticker']}\n"
-            f"💵 Ціна за шт: {context.user_data['price_per_unit']:.2f} грн\n"
+            f"💵 Ціна за шт: {context.user_data['price_per_unit']:.2f} $\n"
             f"📦 Кількість: {context.user_data['quantity']} шт\n"
-            f"💰 Сума: {context.user_data['total_amount']:.2f} грн\n"
-            f"💸 Комісія: {context.user_data.get('commission', 0):.2f} грн\n"
+            f"💰 Сума: {context.user_data['total_amount']:.2f} $\n"
+            f"💸 Комісія: {context.user_data.get('commission', 0):.2f} $\n"
             f"📊 Біржа: {context.user_data['platform']}",
             reply_markup=InlineKeyboardMarkup([
                 [InlineKeyboardButton("🔙 Назад до Акцій", callback_data='stocks')]
@@ -566,7 +566,7 @@ async def handle_message_stocks(update: Update, context: CallbackContext):
                 total_amount = context.user_data['price_per_unit'] * quantity
                 context.user_data['total_amount'] = total_amount
                 context.user_data['stock_step'] = 'commission'
-                await update.message.reply_text("💸 Введіть комісію (грн):")
+                await update.message.reply_text("💸 Введіть комісію за транзакцію:")
             except ValueError:
                 await update.message.reply_text("❌ Будь ласка, введіть коректне число")
         
@@ -580,8 +580,8 @@ async def handle_message_stocks(update: Update, context: CallbackContext):
                     [InlineKeyboardButton("📊 IB", callback_data='stock_platform_ib')]
                 ]
                 await update.message.reply_text(
-                    f"💵 Сума: {context.user_data['total_amount']:.2f} грн\n"
-                    f"💸 Комісія: {commission:.2f} грн\n\n📊 Виберіть біржу:",
+                    f"💵 Сума: {context.user_data['total_amount']:.2f} $\n"
+                    f"💸 Комісія: {commission:.2f} $\n\n📊 Виберіть біржу:",
                     reply_markup=InlineKeyboardMarkup(keyboard)
                 )
             except ValueError:
