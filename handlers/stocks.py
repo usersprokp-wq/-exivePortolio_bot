@@ -260,8 +260,8 @@ async def show_stocks_list(update: Update, context: CallbackContext):
         await query.edit_message_text(f"❌ Помилка: {str(e)}")
 
 
-async def show_stocks_portfolio(update: Update, context: CallbackContext):
-    """Показати портфель акцій"""
+async def show_stocks_portfolio(update: Update, context: CallbackContext, platform=None):
+    """Показати портфель акцій з можливістю фільтрування по біржі"""
     query = update.callback_query
     await query.answer()
     
@@ -272,22 +272,23 @@ async def show_stocks_portfolio(update: Update, context: CallbackContext):
             return
         
         session = Session()
-        stocks = session.query(Stock).all()
+        stocks = session.query(Stock).order_by(Stock.id.desc()).all()
         session.close()
         
         if not stocks:
             keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data='stocks')]]
-            await query.edit_message_text("📭 Портфель пустий", reply_markup=InlineKeyboardMarkup(keyboard))
+            await query.edit_message_text("📭 Немає записів", reply_markup=InlineKeyboardMarkup(keyboard))
             return
         
-        # Розраховуємо портфель
+        # Будуємо портфель
         portfolio = {}
         for stock in stocks:
             if stock.ticker not in portfolio:
                 portfolio[stock.ticker] = {
                     'total_quantity': 0,
                     'total_amount': 0,
-                    'platform': stock.platform
+                    'platform': stock.platform,
+                    'date': stock.date  # Зберігаємо дату
                 }
             
             if stock.operation_type == 'купівля':
@@ -305,34 +306,38 @@ async def show_stocks_portfolio(update: Update, context: CallbackContext):
             await query.edit_message_text("📭 Портфель пустий", reply_markup=InlineKeyboardMarkup(keyboard))
             return
         
+        # Фільтруємо по біржі якщо вибрана
+        if platform:
+            portfolio = {k: v for k, v in portfolio.items() if v['platform'] == platform}
+            if not portfolio:
+                keyboard = [
+                    [InlineKeyboardButton("📊 FF", callback_data='portfolio_ff'), InlineKeyboardButton("📊 IB", callback_data='portfolio_ib')],
+                    [InlineKeyboardButton("🔙 Назад", callback_data='stocks')]
+                ]
+                await query.edit_message_text(f"📭 Немає акцій на біржі {platform}", reply_markup=InlineKeyboardMarkup(keyboard))
+                return
+        
+        # Сортуємо по даті (новіші зверху)
+        portfolio_sorted = sorted(portfolio.items(), key=lambda x: x[1]['date'], reverse=True)
+        
         text = "💼 *Портфель Акцій*\n\n"
         total_invested = 0
         
-        # Сортуємо по біржам
-        platforms = ['FF', 'IB']
-        
-        for platform in platforms:
-            platform_portfolio = {k: v for k, v in portfolio.items() if v['platform'] == platform}
-            
-            if not platform_portfolio:
-                continue
-            
-            text += f"📊 *Біржа: {platform}*\n"
-            
-            for ticker, data in sorted(platform_portfolio.items()):
-                avg_price = data['total_amount'] / data['total_quantity'] if data['total_quantity'] > 0 else 0
-                text += f"   📈 *{ticker}*\n"
-                text += f"      📦 Кількість: {data['total_quantity']} шт\n"
-                text += f"      💰 Ціна: {avg_price:.2f} $\n"
-                text += f"      💵 Сума: {data['total_amount']:.2f} $\n\n"
-                total_invested += data['total_amount']
-            
-            text += f"\n"
+        for ticker, data in portfolio_sorted:
+            avg_price = data['total_amount'] / data['total_quantity'] if data['total_quantity'] > 0 else 0
+            text += f"📈 *{ticker}*\n"
+            text += f"   📦 Кількість: {data['total_quantity']} шт\n"
+            text += f"   💰 Ціна: {avg_price:.2f} $\n"
+            text += f"   💵 Сума: {data['total_amount']:.2f} $\n\n"
+            total_invested += data['total_amount']
         
         text += f"━━━━━━━━━━━━━━━━━━━━\n"
         text += f"📊 *Всього інвестовано:* {total_invested:.2f} $"
         
-        keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data='stocks')]]
+        keyboard = [
+            [InlineKeyboardButton("📊 FF", callback_data='portfolio_ff'), InlineKeyboardButton("📊 IB", callback_data='portfolio_ib')],
+            [InlineKeyboardButton("🔙 Назад", callback_data='stocks')]
+        ]
         await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
         
     except Exception as e:
