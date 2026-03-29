@@ -265,9 +265,8 @@ class GoogleSheetsManager:
                         'ticker': row[3] if len(row) > 3 else '',
                         'price_per_unit': float(row[4].replace(',', '.')) if len(row) > 4 and row[4] else 0,
                         'quantity': int(row[5]) if len(row) > 5 and row[5] else 0,
-                        'commission': float(row[6].replace(',', '.')) if len(row) > 6 and row[6] else 0,
-                        'total_amount': float(row[7].replace(',', '.')) if len(row) > 7 and row[7] else 0,
-                        'pnl': float(row[8].replace(',', '.')) if len(row) > 8 and row[8] else 0
+                        'total_amount': float(row[6].replace(',', '.')) if len(row) > 6 and row[6] else 0,
+                        'pnl': float(row[7].replace(',', '.')) if len(row) > 7 and row[7] else 0
                     }
                     stocks_data.append(stock_dict)
                 except (ValueError, IndexError) as e:
