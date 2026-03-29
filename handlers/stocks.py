@@ -106,11 +106,6 @@ async def button_handler_stocks(update: Update, context: CallbackContext):
         await show_stocks_portfolio(update, context, platform='FF')
     elif query.data == 'portfolio_ib':
         await show_stocks_portfolio(update, context, platform='IB')
-    elif query.data == 'stocks_recalc_portfolio':
-        await query.edit_message_text("⏳ Пересчитую портфель...")
-        Session = context.bot_data.get('Session')
-        await recalculate_portfolio(Session)
-        await query.edit_message_text("✅ Портфель пересчитаний!\n\n📋 Дані збережені в БД.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data='stocks')]]))
 
 
 async def show_stocks_menu(update: Update, context: CallbackContext):
@@ -123,7 +118,6 @@ async def show_stocks_menu(update: Update, context: CallbackContext):
         [InlineKeyboardButton("💼 Портфель", callback_data='stocks_portfolio')],
         [InlineKeyboardButton("📊 Статистика", callback_data='stocks_stats')],
         [InlineKeyboardButton("💰 Прибуток", callback_data='stocks_profit')],
-        [InlineKeyboardButton("🔄 Пересчет портфеля", callback_data='stocks_recalc_portfolio')],
         [InlineKeyboardButton("🔙 Назад", callback_data='back_to_menu')]
     ]
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
