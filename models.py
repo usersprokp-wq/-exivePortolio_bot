@@ -28,6 +28,7 @@ class Bond(Base):
     quantity = Column(Integer)
     total_amount = Column(Float)
     platform = Column(String(100))
+    pnl = Column(Float, default=0)  # PnL (прибуток/збиток) — заповнюється при продажу
     created_at = Column(String(50), default=datetime.now().isoformat())
 
 
