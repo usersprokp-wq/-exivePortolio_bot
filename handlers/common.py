@@ -86,10 +86,8 @@ async def button_handler_main(update: Update, context: CallbackContext):
     elif query.data == 'sync':
         text = "🔄 *Синхронізація*\n\nОберіть розділ:"
         keyboard = [
-            [InlineKeyboardButton("📈 ОВДП", callback_data='sync_ovdp')],
-            [InlineKeyboardButton("📊 Акції", callback_data='sync_stocks')],
-            [InlineKeyboardButton("🏦 Депозит", callback_data='sync_deposit')],
-            [InlineKeyboardButton("₿ Крипто", callback_data='sync_crypto')],
+            [InlineKeyboardButton("📈 ОВДП", callback_data='sync_ovdp'), InlineKeyboardButton("📊 Акції", callback_data='sync_stocks')],
+            [InlineKeyboardButton("🏦 Депозит", callback_data='sync_deposit'), InlineKeyboardButton("₿ Крипто", callback_data='sync_crypto')],
             [InlineKeyboardButton("🪙 Нумізматика", callback_data='sync_numismatics')],
             [InlineKeyboardButton("🔙 Назад", callback_data='back_to_menu')]
         ]

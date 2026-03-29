@@ -57,7 +57,6 @@ async def show_stocks_menu(update: Update, context: CallbackContext):
         [InlineKeyboardButton("💼 Портфель", callback_data='stocks_portfolio')],
         [InlineKeyboardButton("📊 Статистика", callback_data='stocks_stats')],
         [InlineKeyboardButton("💰 Прибуток", callback_data='stocks_profit')],
-        [InlineKeyboardButton("🔄 Синхронізація", callback_data='stocks_sync')],
         [InlineKeyboardButton("🔙 Назад", callback_data='back_to_menu')]
     ]
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
