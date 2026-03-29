@@ -31,6 +31,19 @@ class Bond(Base):
     created_at = Column(String(50), default=datetime.now().isoformat())
 
 
+class BondPortfolio(Base):
+    """Модель для портфеля облігацій (зберігає активні позиції)"""
+    __tablename__ = 'bond_portfolio'
+    id = Column(Integer, primary_key=True)
+    bond_number = Column(String(50), unique=True)  # Унікальний номер облігації
+    maturity_date = Column(String(50))  # Дата погашення
+    total_quantity = Column(Integer)  # Загальна кількість облігацій
+    total_amount = Column(Float)  # Загальна сума інвестицій
+    avg_price = Column(Float)  # Середня ціна за облігацію
+    platform = Column(String(100))  # Платформа
+    last_update = Column(String(50), default=datetime.now().isoformat())  # Коли оновлено
+
+
 class ProfitRecord(Base):
     """Таблиця для відслідкування прибутків ОВДП"""
     __tablename__ = 'profit_records'

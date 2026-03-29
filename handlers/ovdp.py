@@ -6,7 +6,7 @@ import requests
 from bs4 import BeautifulSoup
 import time
 
-from models import Bond, ProfitRecord
+from models import Bond, ProfitRecord, BondPortfolio
 
 logger = logging.getLogger(__name__)
 
@@ -223,6 +223,65 @@ def calculate_profit_by_price(bonds):
             logger.info(f"  {bond_num}: profit={stats['profit']:.2f}, sales_count={len(stats['sales'])}")
     
     return dict(bond_stats), total_profit
+
+
+async def recalculate_bond_portfolio(Session):
+    """Пересчитати портфель облігацій з записів bonds та заповнити bond_portfolio"""
+    try:
+        session = Session()
+        
+        # Видаляємо старі дані
+        session.query(BondPortfolio).delete()
+        session.commit()
+        
+        # Отримуємо всі записи з bonds
+        bonds = session.query(Bond).all()
+        
+        if not bonds:
+            session.close()
+            return
+        
+        # Розраховуємо портфель (простий метод)
+        portfolio = {}
+        for bond in bonds:
+            if bond.bond_number not in portfolio:
+                portfolio[bond.bond_number] = {
+                    'total_quantity': 0,
+                    'total_amount': 0,
+                    'maturity_date': bond.maturity_date,
+                    'platform': bond.platform
+                }
+            
+            if bond.operation_type == 'купівля':
+                portfolio[bond.bond_number]['total_quantity'] += bond.quantity
+                portfolio[bond.bond_number]['total_amount'] += bond.total_amount
+            else:  # продаж
+                portfolio[bond.bond_number]['total_quantity'] -= bond.quantity
+                portfolio[bond.bond_number]['total_amount'] -= bond.total_amount
+        
+        # Залишаємо тільки активні позиції
+        portfolio = {k: v for k, v in portfolio.items() if v['total_quantity'] > 0}
+        
+        # Зберігаємо в bond_portfolio
+        for bond_num, data in portfolio.items():
+            avg_price = data['total_amount'] / data['total_quantity'] if data['total_quantity'] > 0 else 0
+            portfolio_record = BondPortfolio(
+                bond_number=bond_num,
+                maturity_date=data['maturity_date'],
+                total_quantity=data['total_quantity'],
+                total_amount=data['total_amount'],
+                avg_price=avg_price,
+                platform=data['platform'],
+                last_update=datetime.now().isoformat()
+            )
+            session.add(portfolio_record)
+        
+        session.commit()
+        session.close()
+        logger.info(f"Портфель облігацій пересчитаний: {len(portfolio)} активних позицій")
+        
+    except Exception as e:
+        logger.error(f"Error recalculating bond portfolio: {e}")
 
 
 async def button_handler_ovdp(update: Update, context: CallbackContext):
