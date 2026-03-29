@@ -595,7 +595,7 @@ async def handle_message_ovdp(update: Update, context: CallbackContext):
 
 
 async def save_bond(update: Update, context: CallbackContext):
-    """Зберігає облігацію в базу даних"""
+    """Зберігає облігацію в базу даних та оновлює портфель"""
     try:
         Session = context.bot_data.get('Session')
         if not Session:
@@ -624,6 +624,9 @@ async def save_bond(update: Update, context: CallbackContext):
         session.add(profit_record)
         session.commit()
         session.close()
+        
+        # Пересчитуємо портфель
+        await recalculate_bond_portfolio(Session)
         
         await update.callback_query.edit_message_text(
             f"✅ *Запис додано!*\n\n"
@@ -1155,7 +1158,15 @@ async def sync_bonds_from_sheets(update: Update, context: CallbackContext):
             if len(errors) > 5:
                 text += f"   • ... та ще {len(errors) - 5} помилок\n"
         else:
-            text += "✨ Без помилок!"
+            text += "✨ Без помилок!\n\n"
+        
+        # Пересчитуємо портфель
+        text += "⏳ Пересчитую портфель облігацій..."
+        await query.edit_message_text(text, parse_mode='Markdown')
+        
+        await recalculate_bond_portfolio(Session)
+        
+        text += "\n✅ Портфель оновлено!"
         
         keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data='sync')]]
         await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
