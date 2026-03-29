@@ -58,6 +58,18 @@ class Stock(Base):
     created_at = Column(String(50), default=datetime.now().isoformat())
 
 
+class StockPortfolio(Base):
+    """Модель для портфеля акцій (зберігає активні позиції)"""
+    __tablename__ = 'stock_portfolio'
+    id = Column(Integer, primary_key=True)
+    ticker = Column(String(20), unique=True)  # Унікальний тікер
+    total_quantity = Column(Integer)  # Загальна кількість акцій
+    total_amount = Column(Float)  # Загальна сума інвестицій
+    avg_price = Column(Float)  # Середня ціна за акцію
+    platform = Column(String(100))  # Біржа
+    last_update = Column(String(50), default=datetime.now().isoformat())  # Коли оновлено
+
+
 class Deposit(Base):
     """Модель для депозитів"""
     __tablename__ = 'deposits'
