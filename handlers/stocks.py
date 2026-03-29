@@ -343,7 +343,13 @@ async def show_stocks_portfolio(update: Update, context: CallbackContext, platfo
             [InlineKeyboardButton("📊 FF", callback_data='portfolio_ff'), InlineKeyboardButton("📊 IB", callback_data='portfolio_ib')],
             [InlineKeyboardButton("🔙 Назад", callback_data='stocks')]
         ]
-        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+        try:
+            await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+        except Exception as e:
+            if "not modified" in str(e).lower():
+                await query.answer("📋 Той же портфель", show_alert=False)
+            else:
+                await query.edit_message_text(f"❌ Помилка: {str(e)}")
         
     except Exception as e:
         await query.edit_message_text(f"❌ Помилка: {str(e)}")
