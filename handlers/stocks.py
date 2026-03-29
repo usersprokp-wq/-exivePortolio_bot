@@ -31,6 +31,8 @@ async def button_handler_stocks(update: Update, context: CallbackContext):
         await sync_stocks_from_sheets(update, context)
     elif query.data.startswith('stocks_date_'):
         await handle_stock_date_selection(update, context)
+    elif query.data.startswith('stocks_cal_'):
+        await handle_calendar_navigation(update, context)
     elif query.data == 'stock_buy':
         context.user_data['stock_operation_type'] = 'купівля'
         context.user_data['stock_step'] = 'ticker'
@@ -68,16 +70,10 @@ async def start_stock_add(update: Update, context: CallbackContext):
     context.user_data['stock_step'] = 'date'
     
     today = datetime.now()
-    tomorrow = today + timedelta(days=1)
-    three_days = today + timedelta(days=3)
-    week = today + timedelta(days=7)
     
     keyboard = [
         [InlineKeyboardButton(f"📅 Сьогодні ({today.strftime('%d.%m.%Y')})", callback_data=f'stocks_date_{today.strftime("%d.%m.%Y")}')],
-        [InlineKeyboardButton(f"📅 Завтра ({tomorrow.strftime('%d.%m.%Y')})", callback_data=f'stocks_date_{tomorrow.strftime("%d.%m.%Y")}')],
-        [InlineKeyboardButton(f"📅 За 3 дні ({three_days.strftime('%d.%m.%Y')})", callback_data=f'stocks_date_{three_days.strftime("%d.%m.%Y")}')],
-        [InlineKeyboardButton(f"📅 Через тиждень ({week.strftime('%d.%m.%Y')})", callback_data=f'stocks_date_{week.strftime("%d.%m.%Y")}')],
-        [InlineKeyboardButton("📅 Вручну", callback_data='stocks_date_manual')],
+        [InlineKeyboardButton("📅 Вибрати дату", callback_data='stocks_date_calendar')],
         [InlineKeyboardButton("🔙 Назад", callback_data='stocks')]
     ]
     await query.edit_message_text(
@@ -92,7 +88,9 @@ async def handle_stock_date_selection(update: Update, context: CallbackContext):
     query = update.callback_query
     date_value = query.data.replace('stocks_date_', '')
     
-    if date_value != 'manual':
+    if date_value == 'calendar':
+        await show_calendar(update, context)
+    elif date_value != 'manual':
         context.user_data['stock_date'] = date_value
         context.user_data['stock_step'] = 'operation_type'
         keyboard = [
@@ -107,6 +105,80 @@ async def handle_stock_date_selection(update: Update, context: CallbackContext):
     else:
         context.user_data['stock_step'] = 'date_manual'
         await query.edit_message_text("📅 Введіть дату вручну (у форматі ДД.ММ.РРРР):", parse_mode='Markdown')
+
+
+async def show_calendar(update: Update, context: CallbackContext):
+    """Показати календар для вибору дати"""
+    query = update.callback_query
+    
+    if 'calendar_month' not in context.user_data:
+        context.user_data['calendar_month'] = datetime.now()
+    
+    current_date = context.user_data['calendar_month']
+    year = current_date.year
+    month = current_date.month
+    
+    first_day = datetime(year, month, 1)
+    last_day = datetime(year, month + 1, 1) - timedelta(days=1) if month < 12 else datetime(year + 1, 1, 1) - timedelta(days=1)
+    start_weekday = first_day.weekday()
+    
+    keyboard = []
+    
+    month_name = first_day.strftime('%B %Y')
+    nav_keyboard = [
+        InlineKeyboardButton("◀️", callback_data=f'stocks_cal_prev_{year}_{month}'),
+        InlineKeyboardButton(month_name, callback_data='stocks_cal_month'),
+        InlineKeyboardButton("▶️", callback_data=f'stocks_cal_next_{year}_{month}')
+    ]
+    keyboard.append(nav_keyboard)
+    
+    days_of_week = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Нд']
+    keyboard.append([InlineKeyboardButton(day, callback_data='stocks_cal_dow') for day in days_of_week])
+    
+    day_buttons = []
+    for _ in range(start_weekday):
+        day_buttons.append(InlineKeyboardButton(" ", callback_data='stocks_cal_empty'))
+    
+    for day in range(1, last_day.day + 1):
+        date_str = f"{day:02d}.{month:02d}.{year}"
+        day_buttons.append(InlineKeyboardButton(str(day), callback_data=f'stocks_date_{date_str}'))
+    
+    for i in range(0, len(day_buttons), 7):
+        keyboard.append(day_buttons[i:i+7])
+    
+    keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data='stocks_add')])
+    
+    await query.edit_message_text(
+        "📅 *Виберіть дату:*",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='Markdown'
+    )
+
+
+async def handle_calendar_navigation(update: Update, context: CallbackContext):
+    """Обробка навігації по календару"""
+    query = update.callback_query
+    await query.answer()
+    
+    if query.data.startswith('stocks_cal_prev_'):
+        parts = query.data.replace('stocks_cal_prev_', '').split('_')
+        year, month = int(parts[0]), int(parts[1])
+        month -= 1
+        if month < 1:
+            month = 12
+            year -= 1
+        context.user_data['calendar_month'] = datetime(year, month, 1)
+    
+    elif query.data.startswith('stocks_cal_next_'):
+        parts = query.data.replace('stocks_cal_next_', '').split('_')
+        year, month = int(parts[0]), int(parts[1])
+        month += 1
+        if month > 12:
+            month = 1
+            year += 1
+        context.user_data['calendar_month'] = datetime(year, month, 1)
+    
+    await show_calendar(update, context)
 
 
 async def save_stock(update: Update, context: CallbackContext):

@@ -96,7 +96,7 @@ def main():
     app.add_handler(CallbackQueryHandler(button_handler_ovdp, pattern=r'^(ovdp|bond_|date_|platform_|portfolio_|write_off|confirm_write_off|pnl_portfolio|bonds_list_page_|sync_sheets_to_db)'))
     
     # Акції обробники (перед спільними, бо більш специфічні)
-    app.add_handler(CallbackQueryHandler(button_handler_stocks, pattern=r'^(stocks|stocks_add|stocks_list|stocks_date_|stocks_portfolio|stocks_stats|stocks_profit|stocks_sync|stocks_sync_from_sheets|stock_buy|stock_sell|stock_platform_)'))
+    app.add_handler(CallbackQueryHandler(button_handler_stocks, pattern=r'^(stocks|stocks_add|stocks_list|stocks_date_|stocks_portfolio|stocks_stats|stocks_profit|stocks_sync|stocks_sync_from_sheets|stocks_cal_|stock_buy|stock_sell|stock_platform_)'))
     
     # Головне меню та спільні функції (загальні кнопки)
     app.add_handler(CallbackQueryHandler(button_handler_main, pattern=r'^(back_to_menu|analysis|sync|stocks|deposit|crypto|numismatics)'))
