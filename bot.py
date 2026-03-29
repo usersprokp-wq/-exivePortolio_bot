@@ -12,7 +12,7 @@ from handlers.common import start, button_handler_main
 
 # Імпортуємо обробники по категоріях
 from handlers.ovdp import button_handler_ovdp, handle_message_ovdp
-from handlers.stocks import button_handler_stocks, handle_message_stocks
+# from handlers.stocks import button_handler_stocks, handle_message_stocks
 
 load_dotenv()
 
@@ -96,7 +96,7 @@ def main():
     app.add_handler(CallbackQueryHandler(button_handler_ovdp, pattern=r'^(ovdp|bond_|date_|platform_|portfolio_|write_off|confirm_write_off|pnl_portfolio|bonds_list_page_|sync_sheets_to_db)'))
     
     # Акції обробники (перед спільними, бо більш специфічні)
-    app.add_handler(CallbackQueryHandler(button_handler_stocks, pattern=r'^(stocks|stocks_add|stocks_list|stocks_date_|stocks_portfolio|stocks_profit|stock_buy|stock_sell|stock_platform_)'))
+    # app.add_handler(CallbackQueryHandler(button_handler_stocks, pattern=r'^(stocks|stocks_add|stocks_list|stocks_date_|stocks_portfolio|stocks_profit|stock_buy|stock_sell|stock_platform_)'))
     
     # Головне меню та спільні функції (загальні кнопки)
     app.add_handler(CallbackQueryHandler(button_handler_main, pattern=r'^(back_to_menu|analysis|sync|stocks|deposit|crypto|numismatics)'))
