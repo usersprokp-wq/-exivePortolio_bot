@@ -53,7 +53,7 @@ class GoogleSheetsManager:
                 return
             
             headers = ['Дата', 'Тип операції', 'Номер ОВДП', 'Термін до', 
-                      'Ціна за шт', 'Кількість', 'Сума', 'Платформа']
+                      'Ціна за шт', 'Кількість', 'Сума', 'Платформа', 'PnL']
             worksheet.append_row(headers)
             
             for bond in bonds_data:
@@ -65,7 +65,8 @@ class GoogleSheetsManager:
                     bond.get('price_per_unit', ''),
                     bond.get('quantity', ''),
                     bond.get('total_amount', ''),
-                    bond.get('platform', '')
+                    bond.get('platform', ''),
+                    bond.get('pnl', 0)
                 ]
                 worksheet.append_row(row)
             
@@ -165,7 +166,8 @@ class GoogleSheetsManager:
                         'price_per_unit': float(row[4].replace(',', '.')) if len(row) > 4 and row[4] else 0,
                         'quantity': int(row[5]) if len(row) > 5 and row[5] else 0,
                         'total_amount': float(row[6].replace(',', '.')) if len(row) > 6 and row[6] else 0,
-                        'platform': row[7] if len(row) > 7 else ''
+                        'platform': row[7] if len(row) > 7 else '',
+                        'pnl': float(row[8].replace(',', '.')) if len(row) > 8 and row[8] else 0
                     }
                     bonds_data.append(bond_dict)
                 except (ValueError, IndexError) as e:
