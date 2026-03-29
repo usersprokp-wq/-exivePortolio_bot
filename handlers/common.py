@@ -41,14 +41,9 @@ async def button_handler_main(update: Update, context: CallbackContext):
         await show_ovdp_menu(update, context)
     
     elif query.data == 'stocks':
-        text = "📊 *Акції*\n\nОберіть дію:"
-        keyboard = [
-            [InlineKeyboardButton("➕ Додати", callback_data='stocks_add')],
-            [InlineKeyboardButton("📋 Список", callback_data='stocks_list')],
-            [InlineKeyboardButton("🔙 Назад", callback_data='back_to_menu')]
-        ]
-        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
-    
+        from handlers.stocks import show_stocks_menu
+        await show_stocks_menu(update, context)
+
     elif query.data == 'deposit':
         text = "🏦 *Депозит*\n\nОберіть дію:"
         keyboard = [
