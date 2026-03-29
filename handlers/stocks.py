@@ -308,14 +308,26 @@ async def show_stocks_portfolio(update: Update, context: CallbackContext):
         text = "💼 *Портфель Акцій*\n\n"
         total_invested = 0
         
-        for ticker, data in sorted(portfolio.items()):
-            avg_price = data['total_amount'] / data['total_quantity'] if data['total_quantity'] > 0 else 0
-            text += f"📈 *{ticker}*\n"
-            text += f"   📦 Кількість: {data['total_quantity']} шт\n"
-            text += f"   💰 Ціна: {avg_price:.2f} $\n"
-            text += f"   💵 Сума: {data['total_amount']:.2f} $\n"
-            text += f"   🏦 Платформа: {data['platform']}\n\n"
-            total_invested += data['total_amount']
+        # Сортуємо по біржам
+        platforms = ['FF', 'IB']
+        
+        for platform in platforms:
+            platform_portfolio = {k: v for k, v in portfolio.items() if v['platform'] == platform}
+            
+            if not platform_portfolio:
+                continue
+            
+            text += f"📊 *Біржа: {platform}*\n"
+            
+            for ticker, data in sorted(platform_portfolio.items()):
+                avg_price = data['total_amount'] / data['total_quantity'] if data['total_quantity'] > 0 else 0
+                text += f"   📈 *{ticker}*\n"
+                text += f"      📦 Кількість: {data['total_quantity']} шт\n"
+                text += f"      💰 Ціна: {avg_price:.2f} $\n"
+                text += f"      💵 Сума: {data['total_amount']:.2f} $\n\n"
+                total_invested += data['total_amount']
+            
+            text += f"\n"
         
         text += f"━━━━━━━━━━━━━━━━━━━━\n"
         text += f"📊 *Всього інвестовано:* {total_invested:.2f} $"
