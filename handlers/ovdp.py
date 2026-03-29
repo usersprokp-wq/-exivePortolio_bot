@@ -711,21 +711,21 @@ async def show_bonds_stats(update: Update, context: CallbackContext):
         text += f"   {current_portfolio:.0f} грн\n"
         text += f"   Кількість ОВДП: {total_quantity} шт\n\n"
         
-        # Розраховуємо активи по платформах (беремо з портфеля)
+        # Розраховуємо активи по платформах (тільки облігації в портфелі з кількістю > 0)
         platform_current = {'ICU': 0, 'SENSBANK': 0}
         
-        # Для кожної облігації в портфелі знаходимо її платформу
         for bond_num, data in portfolio_by_bond.items():
-            # Беремо платформу з останньої операції (купівля або продаж) для цієї облігації
-            bond_platform = None
-            for bond in reversed(bonds):  # Йдемо з кінця щоб взяти останню
-                if bond.bond_number == bond_num:
-                    bond_platform = bond.platform.upper()
-                    break
-            
-            # Додаємо суму облігацій в портфелі до відповідної платформи
-            if bond_platform and bond_platform in platform_current:
-                platform_current[bond_platform] += data['total_amount']
+            if data['quantity'] > 0:  # Тільки облігації що лишилися в портфелі
+                # Беремо платформу з останньої операції для цієї облігації
+                bond_platform = None
+                for bond in reversed(bonds):
+                    if bond.bond_number == bond_num:
+                        bond_platform = bond.platform.upper()
+                        break
+                
+                # Додаємо суму облігацій до відповідної платформи
+                if bond_platform and bond_platform in platform_current:
+                    platform_current[bond_platform] += data['total_amount']
         
         text += "🏦 *Активи по платформах:*\n"
         text += f"   ICU: {platform_current['ICU']:.0f} грн\n"
@@ -757,24 +757,26 @@ async def show_bonds_stats(update: Update, context: CallbackContext):
         today = datetime.now()
         payments = []
         
+        # Беремо тільки облігації що в портфелі (кількість > 0)
         for bond_num, data in portfolio_by_bond.items():
-            try:
-                maturity = datetime.strptime(data['maturity_date'], '%d.%m.%Y')
-                if maturity > today:
-                    payments.append({
-                        'date': maturity,
-                        'bond_number': bond_num,
-                        'quantity': data['quantity'],
-                        'amount': data['total_amount']
-                    })
-            except:
-                pass
+            if data['quantity'] > 0:  # ТІЛЬКИ облігації в портфелі!
+                try:
+                    maturity = datetime.strptime(data['maturity_date'], '%d.%m.%Y')
+                    if maturity > today:
+                        payments.append({
+                            'date': maturity,
+                            'bond_number': bond_num,
+                            'quantity': data['quantity'],
+                            'amount': data['total_amount']
+                        })
+                except:
+                    pass
         
         payments.sort(key=lambda x: x['date'])
         
         if payments:
             for p in payments[:5]:
-                text += f"   {p['date'].strftime('%d.%m.%Y')} - {p['quantity']} шт ({p['amount']:.0f} грн)\n"
+                text += f"   {p['date'].strftime('%d.%m.%Y')} - {p['bond_number']} - {p['quantity']} шт ({p['amount']:.0f} грн)\n"
         else:
             text += "   Немає майбутніх виплат\n"
         
