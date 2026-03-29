@@ -94,6 +94,9 @@ async def button_handler_stocks(update: Update, context: CallbackContext):
         await start_stock_add(update, context)
     elif query.data == 'stocks_list':
         await show_stocks_list(update, context)
+    elif query.data.startswith('stocks_list_page_'):
+        page = int(query.data.replace('stocks_list_page_', ''))
+        await show_stocks_list(update, context, page=page)
     elif query.data == 'stocks_portfolio':
         await show_stocks_portfolio(update, context)
     elif query.data == 'stocks_stats':
@@ -363,8 +366,8 @@ async def save_stock(update: Update, context: CallbackContext):
         await update.callback_query.edit_message_text(f"❌ Помилка при збереженні: {str(e)}")
 
 
-async def show_stocks_list(update: Update, context: CallbackContext):
-    """Показати список записів акцій"""
+async def show_stocks_list(update: Update, context: CallbackContext, page=1):
+    """Показати список записів акцій з пагінацією"""
     query = update.callback_query
     await query.answer()
     
@@ -383,12 +386,36 @@ async def show_stocks_list(update: Update, context: CallbackContext):
             await query.edit_message_text("📭 Немає записів", reply_markup=InlineKeyboardMarkup(keyboard))
             return
         
-        text = f"📋 *Мої записи Акцій*\n\n"
-        for stock in stocks:
+        # Пагінація — по 10 записів на сторінку
+        records_per_page = 10
+        total_pages = (len(stocks) + records_per_page - 1) // records_per_page
+        
+        if page < 1:
+            page = 1
+        if page > total_pages:
+            page = total_pages
+        
+        start_idx = (page - 1) * records_per_page
+        end_idx = start_idx + records_per_page
+        page_stocks = stocks[start_idx:end_idx]
+        
+        text = f"📋 *Мої записи Акцій* (сторінка {page}/{total_pages})\n\n"
+        for stock in page_stocks:
             text += f"📅 {stock.date} | {'🟢' if stock.operation_type == 'купівля' else '🔴'} {stock.operation_type} | {stock.platform}\n"
             text += f"   📈 {stock.ticker} | {stock.quantity} шт | {stock.total_amount:.2f} $\n\n"
         
-        keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data='stocks')]]
+        keyboard = []
+        
+        if total_pages > 1:
+            page_buttons = []
+            for p in range(1, total_pages + 1):
+                if p == page:
+                    page_buttons.append(InlineKeyboardButton(f"[{p}]", callback_data=f'stocks_list_page_{p}'))
+                else:
+                    page_buttons.append(InlineKeyboardButton(str(p), callback_data=f'stocks_list_page_{p}'))
+            keyboard.append(page_buttons)
+        
+        keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data='stocks')])
         await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
         
     except Exception as e:
