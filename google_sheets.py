@@ -230,7 +230,7 @@ class GoogleSheetsManager:
                     item.get('avg_price', 0),
                     item.get('total_amount', 0),
                     item.get('platform', ''),
-                    item.get('pnl_percent', 0)
+                    item.get('percent', 0)
                 ]
                 worksheet.append_row(row)
             

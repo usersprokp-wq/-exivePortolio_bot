@@ -58,11 +58,29 @@ async def recalculate_portfolio(Session):
             session.add(portfolio_record)
         
         session.commit()
+        
+        # Перераховуємо процентовку
+        recalculate_percents(session)
+        
         session.close()
         logger.info(f"Портфель пересчитаний: {len(portfolio)} активних позицій")
         
     except Exception as e:
         logger.error(f"Error recalculating portfolio: {e}")
+
+
+def recalculate_percents(session):
+    """Перераховує % кожної акції від загальної суми портфеля"""
+    try:
+        all_records = session.query(StockPortfolio).all()
+        total_sum = sum(r.total_amount for r in all_records) if all_records else 0
+        
+        for record in all_records:
+            record.percent = (record.total_amount / total_sum * 100) if total_sum > 0 else 0
+        
+        session.commit()
+    except Exception as e:
+        logger.error(f"Error recalculating percents: {e}")
 
 
 async def button_handler_stocks(update: Update, context: CallbackContext):
@@ -310,9 +328,11 @@ async def save_stock(update: Update, context: CallbackContext):
                     portfolio.last_update = datetime.now().isoformat()
         
         session.commit()
-        session.close()
         
-        # Формуємо повідомлення
+        # Перераховуємо процентовку всіх акцій
+        recalculate_percents(session)
+        
+        session.close()
         text = (
             f"✅ *Запис додано!*\n\n"
             f"📅 Дата: {context.user_data['stock_date']}\n"
@@ -415,7 +435,8 @@ async def show_stocks_portfolio(update: Update, context: CallbackContext, platfo
         total_invested = 0
         
         for record in portfolio_records:
-            text += f"📈 *{record.ticker}*\n"
+            pct = record.percent or 0
+            text += f"📈 *{record.ticker}* ({pct:.1f}%)\n"
             text += f"   📦 Кількість: {record.total_quantity} шт\n"
             text += f"   💰 Ціна: {record.avg_price:.2f} $\n"
             text += f"   💵 Сума: {record.total_amount:.2f} $\n\n"
@@ -504,7 +525,7 @@ async def sync_stocks_to_sheets(update: Update, context: CallbackContext):
                 'avg_price': record.avg_price,
                 'total_amount': record.total_amount,
                 'platform': record.platform,
-                'pnl_percent': 0
+                'percent': record.percent or 0
             })
         
         sheets_manager.export_stocks_portfolio(portfolio_data)
