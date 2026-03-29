@@ -240,7 +240,7 @@ async def show_stocks_list(update: Update, context: CallbackContext):
             return
         
         session = Session()
-        stocks = session.query(Stock).all()
+        stocks = session.query(Stock).order_by(Stock.id.desc()).all()
         session.close()
         
         if not stocks:
