@@ -559,7 +559,12 @@ async def handle_message_ovdp(update: Update, context: CallbackContext):
         return
     
     user_message = update.message.text
-    step = context.user_data.get('bond_step') or context.user_data.get('profit_step')
+    
+    # profit_step має пріоритет, бо bond_step може залишитися від попереднього flow
+    if 'profit_step' in context.user_data:
+        step = context.user_data.get('profit_step')
+    else:
+        step = context.user_data.get('bond_step')
     
     try:
         if step == 'date_manual':
