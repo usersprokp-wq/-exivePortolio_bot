@@ -187,10 +187,6 @@ async def sync_bonds_to_sheets(update: Update, context: CallbackContext):
             await query.edit_message_text("❌ Помилка: Google Sheets або БД не доступні")
             return
         
-        # Пересчитуємо портфель перед експортом
-        from handlers.ovdp import recalculate_bond_portfolio
-        await recalculate_bond_portfolio(Session)
-        
         session = Session()
         bonds = session.query(Bond).all()
         

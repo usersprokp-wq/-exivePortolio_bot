@@ -468,13 +468,13 @@ async def sync_stocks_to_sheets(update: Update, context: CallbackContext):
         
         session = Session()
         stocks = session.query(Stock).all()
-        session.close()
         
         if not stocks:
+            session.close()
             await query.edit_message_text("📭 Немає даних для синхронізації")
             return
         
-        # Готуємо дані
+        # Готуємо дані записів
         stocks_data = []
         for stock in stocks:
             stocks_data.append({
@@ -489,48 +489,33 @@ async def sync_stocks_to_sheets(update: Update, context: CallbackContext):
                 'pnl': stock.pnl or 0
             })
         
-        # Експортуємо в Google Sheets
+        # Експортуємо записи в Google Sheets
         sheets_manager.export_stocks_to_sheets(stocks_data)
         
-        # Готуємо портфель
-        portfolio = {}
-        for stock in stocks:
-            if stock.ticker not in portfolio:
-                portfolio[stock.ticker] = {
-                    'total_quantity': 0,
-                    'total_amount': 0,
-                    'platform': stock.platform
-                }
-            
-            if stock.operation_type == 'купівля':
-                portfolio[stock.ticker]['total_quantity'] += stock.quantity
-                portfolio[stock.ticker]['total_amount'] += stock.total_amount
-            else:
-                portfolio[stock.ticker]['total_quantity'] -= stock.quantity
-                portfolio[stock.ticker]['total_amount'] -= stock.total_amount
-        
-        portfolio = {k: v for k, v in portfolio.items() if v['total_quantity'] > 0}
+        # Беремо портфель з stock_portfolio
+        portfolio_records = session.query(StockPortfolio).all()
+        session.close()
         
         portfolio_data = []
-        for ticker, data in portfolio.items():
-            avg_price = data['total_amount'] / data['total_quantity'] if data['total_quantity'] > 0 else 0
+        for record in portfolio_records:
             portfolio_data.append({
-                'ticker': ticker,
-                'total_quantity': data['total_quantity'],
-                'avg_price': avg_price,
-                'total_amount': data['total_amount'],
-                'platform': data['platform'],
+                'ticker': record.ticker,
+                'total_quantity': record.total_quantity,
+                'avg_price': record.avg_price,
+                'total_amount': record.total_amount,
+                'platform': record.platform,
                 'pnl_percent': 0
             })
         
         sheets_manager.export_stocks_portfolio(portfolio_data)
         
-        await query.edit_message_text(
+        text = (
             f"✅ Синхронізовано!\n\n"
             f"📋 Записів: {len(stocks_data)}\n"
-            f"💼 Акцій в портфелі: {len(portfolio_data)}",
-            parse_mode='Markdown'
+            f"💼 Акцій в портфелі: {len(portfolio_data)}"
         )
+        keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data='sync_stocks')]]
+        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
         
     except Exception as e:
         logger.error(f"Error syncing stocks: {e}")
