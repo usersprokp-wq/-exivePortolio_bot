@@ -122,7 +122,7 @@ async def save_stock(update: Update, context: CallbackContext):
             date=context.user_data['stock_date'],
             operation_type=context.user_data['stock_operation_type'],
             ticker=context.user_data['ticker'],
-            name=context.user_data['name'],
+            name=context.user_data['ticker'],
             price_per_unit=context.user_data['price_per_unit'],
             quantity=context.user_data['quantity'],
             total_amount=context.user_data['total_amount'],
@@ -135,13 +135,13 @@ async def save_stock(update: Update, context: CallbackContext):
         await update.callback_query.edit_message_text(
             f"✅ *Запис додано!*\n\n"
             f"📅 Дата: {context.user_data['stock_date']}\n"
-            f"📈 Операція: {context.user_data['stock_operation_type'].capitalize()}\n"
-            f"📊 Тікер: {context.user_data['ticker']}\n"
-            f"📝 Назва: {context.user_data['name']}\n"
+            f"📊 Операція: {context.user_data['stock_operation_type'].capitalize()}\n"
+            f"📈 Тікер: {context.user_data['ticker']}\n"
             f"💵 Ціна за шт: {context.user_data['price_per_unit']:.2f} грн\n"
             f"📦 Кількість: {context.user_data['quantity']} шт\n"
             f"💰 Сума: {context.user_data['total_amount']:.2f} грн\n"
-            f"🏦 Платформа: {context.user_data['platform']}",
+            f"💸 Комісія: {context.user_data.get('commission', 0):.2f} грн\n"
+            f"📊 Біржа: {context.user_data['platform']}",
             reply_markup=InlineKeyboardMarkup([
                 [InlineKeyboardButton("🔙 Назад до Акцій", callback_data='stocks')]
             ]),
@@ -475,11 +475,6 @@ async def handle_message_stocks(update: Update, context: CallbackContext):
         
         elif step == 'ticker':
             context.user_data['ticker'] = user_message.upper()
-            context.user_data['stock_step'] = 'stock_name'
-            await update.message.reply_text("📝 Введіть назву акції:")
-        
-        elif step == 'stock_name':
-            context.user_data['name'] = user_message
             context.user_data['stock_step'] = 'price_per_unit'
             await update.message.reply_text("💰 Введіть ціну за одну акцію:")
         
@@ -498,14 +493,23 @@ async def handle_message_stocks(update: Update, context: CallbackContext):
                 context.user_data['quantity'] = quantity
                 total_amount = context.user_data['price_per_unit'] * quantity
                 context.user_data['total_amount'] = total_amount
+                context.user_data['stock_step'] = 'commission'
+                await update.message.reply_text("💸 Введіть комісію (грн):")
+            except ValueError:
+                await update.message.reply_text("❌ Будь ласка, введіть коректне число")
+        
+        elif step == 'commission':
+            try:
+                commission = float(user_message)
+                context.user_data['commission'] = commission
                 context.user_data['stock_step'] = 'platform'
                 keyboard = [
-                    [InlineKeyboardButton("🏦 FUIB", callback_data='stock_platform_fuib')],
-                    [InlineKeyboardButton("🏦 ALFABANK", callback_data='stock_platform_alfabank')],
-                    [InlineKeyboardButton("🏦 ІНШЕ", callback_data='stock_platform_other')]
+                    [InlineKeyboardButton("📊 FF", callback_data='stock_platform_ff')],
+                    [InlineKeyboardButton("📊 IB", callback_data='stock_platform_ib')]
                 ]
                 await update.message.reply_text(
-                    f"💵 Сума: {total_amount:.2f} грн\n\n🏦 Виберіть платформу:",
+                    f"💵 Сума: {context.user_data['total_amount']:.2f} грн\n"
+                    f"💸 Комісія: {commission:.2f} грн\n\n📊 Виберіть біржу:",
                     reply_markup=InlineKeyboardMarkup(keyboard)
                 )
             except ValueError:
