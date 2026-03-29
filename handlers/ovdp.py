@@ -1027,8 +1027,8 @@ async def show_bonds_stats(update: Update, context: CallbackContext):
             if platform_key in platform_current:
                 platform_current[platform_key] += record.total_amount
         
-        # Розраховуємо прибуток по ціні (FIFO) — з bonds
-        bond_stats, realized_profit = calculate_profit_by_price(bonds)
+        # Реалізований прибуток — сума pnl з усіх продажів
+        realized_profit = sum(b.pnl or 0 for b in bonds if b.operation_type == 'продаж')
         
         text = "📊 *Статистика ОВДП*\n\n"
         text += f"💰 *Вартість портфеля:* {current_portfolio:.0f} грн\n"
@@ -1041,8 +1041,19 @@ async def show_bonds_stats(update: Update, context: CallbackContext):
         text += f"   {realized_profit:.0f} грн\n\n"
         text += "📊 *Динаміка прибутку по місяцях:*\n"
         
-        # Розраховуємо прибуток по місяцях
-        monthly_profits = calculate_monthly_profit(bonds)
+        # Динаміка по місяцях — з pnl по даті продажу
+        monthly_profits = {}
+        for bond in bonds:
+            if bond.operation_type == 'продаж' and (bond.pnl or 0) != 0:
+                try:
+                    parsed = datetime.strptime(str(bond.date).strip(), '%d.%m.%Y')
+                    month_key = f"{parsed.month:02d}.{parsed.year}"
+                except:
+                    month_key = "невідома дата"
+                
+                if month_key not in monthly_profits:
+                    monthly_profits[month_key] = 0
+                monthly_profits[month_key] += bond.pnl or 0
         
         if monthly_profits:
             def parse_month_year(month_str):
@@ -1104,23 +1115,20 @@ async def show_profit_menu(update: Update, context: CallbackContext):
         
         session = Session()
         bonds = session.query(Bond).all()
-        session.close()
         
         if not bonds:
+            session.close()
             await query.edit_message_text("📭 Немає даних про ОВДП")
             return
         
-        # Розраховуємо прибуток по ціні
-        bond_stats, total_profit = calculate_profit_by_price(bonds)
+        # Реалізований прибуток — сума pnl з усіх продажів
+        total_profit = sum(b.pnl or 0 for b in bonds if b.operation_type == 'продаж')
         
         # Отримуємо списаний прибуток
-        session = Session()
         profit_records = session.query(ProfitRecord).filter(ProfitRecord.unrealized_profit > 0).all()
         session.close()
         
-        total_written_off = 0
-        for record in profit_records:
-            total_written_off += record.unrealized_profit
+        total_written_off = sum(r.unrealized_profit for r in profit_records)
         
         unrealized_profit = total_profit - total_written_off
         if unrealized_profit < 0:
@@ -1156,22 +1164,19 @@ async def write_off_profit_menu(update: Update, context: CallbackContext):
         
         session = Session()
         bonds = session.query(Bond).all()
-        session.close()
         
         if not bonds:
+            session.close()
             await query.edit_message_text("📭 Немає даних про ОВДП")
             return
         
-        # Розраховуємо прибуток по ціні
-        bond_stats, total_profit = calculate_profit_by_price(bonds)
+        # Реалізований прибуток — сума pnl з усіх продажів
+        total_profit = sum(b.pnl or 0 for b in bonds if b.operation_type == 'продаж')
         
-        session = Session()
         profit_records = session.query(ProfitRecord).filter(ProfitRecord.unrealized_profit > 0).all()
         session.close()
         
-        total_written_off = 0
-        for record in profit_records:
-            total_written_off += record.unrealized_profit
+        total_written_off = sum(r.unrealized_profit for r in profit_records)
         
         unrealized_profit = total_profit - total_written_off
         if unrealized_profit < 0:
