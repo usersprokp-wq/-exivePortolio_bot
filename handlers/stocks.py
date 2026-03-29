@@ -312,13 +312,13 @@ async def show_stocks_portfolio(update: Update, context: CallbackContext):
             avg_price = data['total_amount'] / data['total_quantity'] if data['total_quantity'] > 0 else 0
             text += f"📈 *{ticker}*\n"
             text += f"   📦 Кількість: {data['total_quantity']} шт\n"
-            text += f"   💰 Ціна: {avg_price:.2f} грн\n"
-            text += f"   💵 Сума: {data['total_amount']:.2f} грн\n"
+            text += f"   💰 Ціна: {avg_price:.2f} $\n"
+            text += f"   💵 Сума: {data['total_amount']:.2f} $\n"
             text += f"   🏦 Платформа: {data['platform']}\n\n"
             total_invested += data['total_amount']
         
         text += f"━━━━━━━━━━━━━━━━━━━━\n"
-        text += f"📊 *Всього інвестовано:* {total_invested:.2f} грн"
+        text += f"📊 *Всього інвестовано:* {total_invested:.2f} $"
         
         keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data='stocks')]]
         await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
