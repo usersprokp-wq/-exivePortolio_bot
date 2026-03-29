@@ -495,10 +495,19 @@ async def save_bond(update: Update, context: CallbackContext):
         session.close()
         
         await update.callback_query.edit_message_text(
-            f"✅ Запис додано!\n\n"
-            f"📈 {context.user_data['bond_operation_type'].capitalize()}\n"
-            f"🔢 {context.user_data['bond_number']}\n"
-            f"💰 {context.user_data['total_amount']:.2f} грн"
+            f"✅ *Запис додано!*\n\n"
+            f"📅 Дата: {context.user_data['bond_date']}\n"
+            f"📈 Операція: {context.user_data['bond_operation_type'].capitalize()}\n"
+            f"🔢 Номер: {context.user_data['bond_number']}\n"
+            f"📆 Термін погашення: {context.user_data['maturity_date']}\n"
+            f"💵 Ціна за шт: {context.user_data['price_per_unit']:.2f} грн\n"
+            f"📦 Кількість: {context.user_data['quantity']} шт\n"
+            f"💰 Сума: {context.user_data['total_amount']:.2f} грн\n"
+            f"🏦 Платформа: {context.user_data['platform']}",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("🔙 Назад до ОВДП", callback_data='ovdp')]
+            ]),
+            parse_mode='Markdown'
         )
         context.user_data.clear()
         
