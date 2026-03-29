@@ -750,9 +750,8 @@ async def show_bonds_stats(update: Update, context: CallbackContext):
         bond_stats, realized_profit = calculate_profit_by_price(bonds)
         
         text = "📊 *Статистика ОВДП*\n\n"
-        text += "💰 *Вартість портфеля:*\n"
-        text += f"   {current_portfolio:.0f} грн\n"
-        text += f"   Кількість ОВДП: {total_quantity} шт\n\n"
+        text += f"💰 *Вартість портфеля:* {current_portfolio:.0f} грн\n"
+        text += f"    *Кількість ОВДП:* {total_quantity} шт\n\n"
         
         # Розраховуємо активи по платформах (тільки облігації в портфелі з кількістю > 0)
         platform_current = {'ICU': 0, 'SENSBANK': 0}
