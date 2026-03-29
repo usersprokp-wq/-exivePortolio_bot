@@ -626,9 +626,8 @@ async def show_bonds_list(update: Update, context: CallbackContext, page=1):
         
         text = f"📋 *Мої записи ОВДП* (сторінка {page}/{total_pages})\n\n"
         for bond in page_bonds:
-            text += f"📅 {bond.date} | "
-            text += f"{'🟢' if bond.operation_type == 'купівля' else '🔴'} {bond.operation_type}\n"
-            text += f"   🔢 {bond.bond_number} | 💰 {bond.total_amount:.2f} грн | {bond.platform}\n\n"
+            text += f"📅 {bond.date} | {'🟢' if bond.operation_type == 'купівля' else '🔴'} {bond.operation_type} | {bond.platform}\n"
+            text += f"   🔢 {bond.bond_number} | {bond.quantity} шт | {bond.total_amount:.2f} грн\n\n"
         
         # Будуємо кнопки пагінації
         keyboard = []
