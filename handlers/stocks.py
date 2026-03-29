@@ -369,7 +369,7 @@ async def show_stocks_list(update: Update, context: CallbackContext):
 
 
 async def show_stocks_portfolio(update: Update, context: CallbackContext, platform=None):
-    """Показати портфель акцій з можливістю фільтрування по біржі"""
+    """Показати портфель акцій з таблиці stock_portfolio"""
     query = update.callback_query
     await query.answer()
     
@@ -380,45 +380,20 @@ async def show_stocks_portfolio(update: Update, context: CallbackContext, platfo
             return
         
         session = Session()
-        stocks = session.query(Stock).order_by(Stock.id.desc()).all()
+        # Беремо дані прямо з таблиці stock_portfolio
+        portfolio_records = session.query(StockPortfolio).order_by(StockPortfolio.last_update.desc()).all()
         session.close()
         
-        if not stocks:
-            keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data='stocks')]]
-            await query.edit_message_text("📭 Немає записів", reply_markup=InlineKeyboardMarkup(keyboard))
-            return
-        
-        # Будуємо портфель
-        portfolio = {}
-        for stock in stocks:
-            if stock.ticker not in portfolio:
-                portfolio[stock.ticker] = {
-                    'total_quantity': 0,
-                    'total_amount': 0,
-                    'platform': stock.platform,
-                    'date': stock.date  # Зберігаємо дату
-                }
-            
-            if stock.operation_type == 'купівля':
-                portfolio[stock.ticker]['total_quantity'] += stock.quantity
-                portfolio[stock.ticker]['total_amount'] += stock.total_amount
-            else:
-                portfolio[stock.ticker]['total_quantity'] -= stock.quantity
-                portfolio[stock.ticker]['total_amount'] -= stock.total_amount
-        
-        # Залишаємо тільки активні позиції
-        portfolio = {k: v for k, v in portfolio.items() if v['total_quantity'] > 0}
-        
-        if not portfolio:
+        if not portfolio_records:
             keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data='stocks')]]
             await query.edit_message_text("📭 Портфель пустий", reply_markup=InlineKeyboardMarkup(keyboard))
             return
         
         # Фільтруємо по біржі якщо вибрана
         if platform:
-            platform = platform.upper()  # Привести до великих літер
-            portfolio = {k: v for k, v in portfolio.items() if v['platform'] == platform}
-            if not portfolio:
+            platform = platform.upper()
+            portfolio_records = [p for p in portfolio_records if p.platform == platform]
+            if not portfolio_records:
                 keyboard = [
                     [InlineKeyboardButton("📊 FF", callback_data='portfolio_ff'), InlineKeyboardButton("📊 IB", callback_data='portfolio_ib')],
                     [InlineKeyboardButton("🔙 Назад", callback_data='stocks')]
@@ -429,19 +404,15 @@ async def show_stocks_portfolio(update: Update, context: CallbackContext, platfo
                     logger.error(f"Error editing message: {e}")
                 return
         
-        # Сортуємо по даті (новіші зверху)
-        portfolio_sorted = sorted(portfolio.items(), key=lambda x: x[1]['date'], reverse=True)
-        
         text = "💼 *Портфель Акцій*\n\n"
         total_invested = 0
         
-        for ticker, data in portfolio_sorted:
-            avg_price = data['total_amount'] / data['total_quantity'] if data['total_quantity'] > 0 else 0
-            text += f"📈 *{ticker}*\n"
-            text += f"   📦 Кількість: {data['total_quantity']} шт\n"
-            text += f"   💰 Ціна: {avg_price:.2f} $\n"
-            text += f"   💵 Сума: {data['total_amount']:.2f} $\n\n"
-            total_invested += data['total_amount']
+        for record in portfolio_records:
+            text += f"📈 *{record.ticker}*\n"
+            text += f"   📦 Кількість: {record.total_quantity} шт\n"
+            text += f"   💰 Ціна: {record.avg_price:.2f} $\n"
+            text += f"   💵 Сума: {record.total_amount:.2f} $\n\n"
+            total_invested += record.total_amount
         
         text += f"━━━━━━━━━━━━━━━━━━━━\n"
         text += f"📊 *Всього інвестовано:* {total_invested:.2f} $"
