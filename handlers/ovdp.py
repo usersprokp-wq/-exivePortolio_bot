@@ -819,6 +819,11 @@ async def show_bonds_stats(update: Update, context: CallbackContext):
             return
         
         session = Session()
+        
+        # Беремо дані портфеля з bond_portfolio
+        portfolio_records = session.query(BondPortfolio).all()
+        
+        # Беремо всі записи для розрахунку прибутку
         bonds = session.query(Bond).all()
         session.close()
         
@@ -826,62 +831,24 @@ async def show_bonds_stats(update: Update, context: CallbackContext):
             await query.edit_message_text("📭 Немає даних для статистики")
             return
         
-        total_buy = 0
-        total_sell = 0
-        total_quantity = 0
-        portfolio_by_bond = {}
-        
-        for bond in bonds:
-            amount = bond.total_amount
-            
-            # Додаємо облігацію в портфель
-            if bond.bond_number not in portfolio_by_bond:
-                portfolio_by_bond[bond.bond_number] = {
-                    'maturity_date': bond.maturity_date,
-                    'quantity': 0,
-                    'total_amount': 0
-                }
-            
-            if bond.operation_type == 'купівля':
-                total_buy += amount
-                total_quantity += bond.quantity
-                portfolio_by_bond[bond.bond_number]['quantity'] += bond.quantity
-                portfolio_by_bond[bond.bond_number]['total_amount'] += amount
-            else:
-                total_sell += amount
-                # ДЛЯ ПРОДАЖІВ - ВИЧИТАЄМО З ПОРТФЕЛЯ!
-                total_quantity -= bond.quantity
-                portfolio_by_bond[bond.bond_number]['quantity'] -= bond.quantity
-                portfolio_by_bond[bond.bond_number]['total_amount'] -= amount
-        
-        # Розраховуємо вартість портфеля - сума усіх облігацій що залишилися (після продажів)
+        # Вартість портфеля, кількість, активи по платформах — з bond_portfolio
         current_portfolio = 0
-        for bond_num, data in portfolio_by_bond.items():
-            if data['quantity'] > 0:  # Тільки облігації що ще в портфелі
-                current_portfolio += data['total_amount']
+        total_quantity = 0
+        platform_current = {'ICU': 0, 'SENSBANK': 0}
         
-        # Розраховуємо прибуток по ціні
+        for record in portfolio_records:
+            current_portfolio += record.total_amount
+            total_quantity += record.total_quantity
+            platform_key = record.platform.upper() if record.platform else ''
+            if platform_key in platform_current:
+                platform_current[platform_key] += record.total_amount
+        
+        # Розраховуємо прибуток по ціні (FIFO) — з bonds
         bond_stats, realized_profit = calculate_profit_by_price(bonds)
         
         text = "📊 *Статистика ОВДП*\n\n"
         text += f"💰 *Вартість портфеля:* {current_portfolio:.0f} грн\n"
         text += f"🔢 *Кількість ОВДП:* {total_quantity} шт\n\n"
-        
-        # Розраховуємо активи по платформах (тільки облігації в портфелі з кількістю > 0)
-        platform_current = {'ICU': 0, 'SENSBANK': 0}
-        
-        for bond_num, data in portfolio_by_bond.items():
-            if data['quantity'] > 0:  # Тільки облігації що лишилися в портфелі
-                # Беремо платформу з останньої операції для цієї облігації
-                bond_platform = None
-                for bond in reversed(bonds):
-                    if bond.bond_number == bond_num:
-                        bond_platform = bond.platform.upper()
-                        break
-                
-                # Додаємо суму облігацій до відповідної платформи
-                if bond_platform and bond_platform in platform_current:
-                    platform_current[bond_platform] += data['total_amount']
         
         text += "🏦 *Активи по платформах:*\n"
         text += f"   ICU: {platform_current['ICU']:.0f} грн\n"
@@ -894,8 +861,6 @@ async def show_bonds_stats(update: Update, context: CallbackContext):
         monthly_profits = calculate_monthly_profit(bonds)
         
         if monthly_profits:
-            # Сортуємо по даті, не по текстовому ключу
-            from datetime import datetime
             def parse_month_year(month_str):
                 try:
                     return datetime.strptime(month_str, '%m.%Y')
@@ -913,20 +878,19 @@ async def show_bonds_stats(update: Update, context: CallbackContext):
         today = datetime.now()
         payments = []
         
-        # Беремо тільки облігації що в портфелі (кількість > 0)
-        for bond_num, data in portfolio_by_bond.items():
-            if data['quantity'] > 0:  # ТІЛЬКИ облігації в портфелі!
-                try:
-                    maturity = datetime.strptime(data['maturity_date'], '%d.%m.%Y')
-                    if maturity > today:
-                        payments.append({
-                            'date': maturity,
-                            'bond_number': bond_num,
-                            'quantity': data['quantity'],
-                            'amount': data['total_amount']
-                        })
-                except:
-                    pass
+        # Найближчі виплати — з bond_portfolio
+        for record in portfolio_records:
+            try:
+                maturity = datetime.strptime(record.maturity_date, '%d.%m.%Y')
+                if maturity > today:
+                    payments.append({
+                        'date': maturity,
+                        'bond_number': record.bond_number,
+                        'quantity': record.total_quantity,
+                        'amount': record.total_amount
+                    })
+            except:
+                pass
         
         payments.sort(key=lambda x: x['date'])
         
