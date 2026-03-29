@@ -250,6 +250,8 @@ async def button_handler_ovdp(update: Update, context: CallbackContext):
         await show_bonds_portfolio(update, context, platform=platform)
     elif query.data.startswith('date_'):
         await handle_date_selection(update, context)
+    elif query.data.startswith('cal_'):
+        await handle_bond_calendar_navigation(update, context)
     elif query.data == 'bond_buy':
         context.user_data['bond_operation_type'] = 'купівля'
         context.user_data['bond_step'] = 'bond_number'
@@ -295,16 +297,10 @@ async def start_bond_add(update: Update, context: CallbackContext):
     context.user_data['bond_step'] = 'date'
     
     today = datetime.now()
-    tomorrow = today + timedelta(days=1)
-    three_days = today + timedelta(days=3)
-    week = today + timedelta(days=7)
     
     keyboard = [
         [InlineKeyboardButton(f"📅 Сьогодні ({today.strftime('%d.%m.%Y')})", callback_data=f'date_{today.strftime("%d.%m.%Y")}')],
-        [InlineKeyboardButton(f"📅 Завтра ({tomorrow.strftime('%d.%m.%Y')})", callback_data=f'date_{tomorrow.strftime("%d.%m.%Y")}')],
-        [InlineKeyboardButton(f"📅 За 3 дні ({three_days.strftime('%d.%m.%Y')})", callback_data=f'date_{three_days.strftime("%d.%m.%Y")}')],
-        [InlineKeyboardButton(f"📅 Через тиждень ({week.strftime('%d.%m.%Y')})", callback_data=f'date_{week.strftime("%d.%m.%Y")}')],
-        [InlineKeyboardButton("📅 Вручну", callback_data='date_manual')],
+        [InlineKeyboardButton("📅 Вибрати дату", callback_data='date_calendar')],
         [InlineKeyboardButton("🔙 Назад", callback_data='ovdp')]
     ]
     await query.edit_message_text(
@@ -319,7 +315,9 @@ async def handle_date_selection(update: Update, context: CallbackContext):
     query = update.callback_query
     date_value = query.data.replace('date_', '')
     
-    if date_value != 'manual':
+    if date_value == 'calendar':
+        await show_bond_calendar(update, context)
+    elif date_value != 'manual':
         context.user_data['bond_date'] = date_value
         context.user_data['bond_step'] = 'operation_type'
         keyboard = [
@@ -334,6 +332,80 @@ async def handle_date_selection(update: Update, context: CallbackContext):
     else:
         context.user_data['bond_step'] = 'date_manual'
         await query.edit_message_text("📅 Введіть дату вручну (у форматі ДД.ММ.РРРР):", parse_mode='Markdown')
+
+
+async def show_bond_calendar(update: Update, context: CallbackContext):
+    """Показати календар для вибору дати ОВДП"""
+    query = update.callback_query
+    
+    if 'calendar_month' not in context.user_data:
+        context.user_data['calendar_month'] = datetime.now()
+    
+    current_date = context.user_data['calendar_month']
+    year = current_date.year
+    month = current_date.month
+    
+    first_day = datetime(year, month, 1)
+    last_day = datetime(year, month + 1, 1) - timedelta(days=1) if month < 12 else datetime(year + 1, 1, 1) - timedelta(days=1)
+    start_weekday = first_day.weekday()
+    
+    keyboard = []
+    
+    month_name = first_day.strftime('%B %Y')
+    nav_keyboard = [
+        InlineKeyboardButton("◀️", callback_data=f'cal_prev_{year}_{month}'),
+        InlineKeyboardButton(month_name, callback_data='cal_month'),
+        InlineKeyboardButton("▶️", callback_data=f'cal_next_{year}_{month}')
+    ]
+    keyboard.append(nav_keyboard)
+    
+    days_of_week = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Нд']
+    keyboard.append([InlineKeyboardButton(day, callback_data='cal_dow') for day in days_of_week])
+    
+    day_buttons = []
+    for _ in range(start_weekday):
+        day_buttons.append(InlineKeyboardButton(" ", callback_data='cal_empty'))
+    
+    for day in range(1, last_day.day + 1):
+        date_str = f"{day:02d}.{month:02d}.{year}"
+        day_buttons.append(InlineKeyboardButton(str(day), callback_data=f'date_{date_str}'))
+    
+    for i in range(0, len(day_buttons), 7):
+        keyboard.append(day_buttons[i:i+7])
+    
+    keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data='ovdp_add')])
+    
+    await query.edit_message_text(
+        "📅 *Виберіть дату:*",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='Markdown'
+    )
+
+
+async def handle_bond_calendar_navigation(update: Update, context: CallbackContext):
+    """Обробка навігації по календару для ОВДП"""
+    query = update.callback_query
+    await query.answer()
+    
+    if query.data.startswith('cal_prev_'):
+        parts = query.data.replace('cal_prev_', '').split('_')
+        year, month = int(parts[0]), int(parts[1])
+        month -= 1
+        if month < 1:
+            month = 12
+            year -= 1
+        context.user_data['calendar_month'] = datetime(year, month, 1)
+    
+    elif query.data.startswith('cal_next_'):
+        parts = query.data.replace('cal_next_', '').split('_')
+        year, month = int(parts[0]), int(parts[1])
+        month += 1
+        if month > 12:
+            month = 1
+            year += 1
+        context.user_data['calendar_month'] = datetime(year, month, 1)
+    
+    await show_bond_calendar(update, context)
 
 
 async def handle_message_ovdp(update: Update, context: CallbackContext):
