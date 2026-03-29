@@ -905,7 +905,7 @@ def create_bond_key(bond_data):
 
 
 async def sync_bonds_from_sheets(update: Update, context: CallbackContext):
-    """Синхронізація ОВДП з Excel → БД"""
+    """Синхронізація ОВДП з Excel → БД (простий експорт)"""
     query = update.callback_query
     await query.answer()
     
@@ -920,113 +920,63 @@ async def sync_bonds_from_sheets(update: Update, context: CallbackContext):
         # Імпортуємо дані з Google Sheets
         excel_bonds_data = sheets_manager.import_bonds_from_sheets()
         
-        logger.info(f"DEBUG: excel_bonds_data count = {len(excel_bonds_data)}")
-        
         if not excel_bonds_data:
             await query.edit_message_text("📭 Немає даних в Excel для синхронізації")
             return
         
+        session = Session()
+        
+        # 1. ВИДАЛЯЄМО ВСЕ з БД
         try:
-            session = Session()
-            db_bonds = session.query(Bond).all()
-            logger.info(f"DEBUG: db_bonds loaded, count = {len(db_bonds)}")
+            session.query(Bond).delete()
+            session.commit()
+            deleted = len(excel_bonds_data)  # Кількість рядків що були
         except Exception as e:
-            logger.error(f"DEBUG: Error loading db_bonds: {e}")
-            session.close()
-            await query.edit_message_text(f"❌ Помилка завантаження БД: {str(e)}")
-            return
+            session.rollback()
+            logger.error(f"Error deleting bonds: {e}")
+            deleted = 0
         
-        # Створюємо словники для порівняння
-        excel_keys = set()
-        excel_data_by_key = {}
-        
-        for row_idx, bond_data in enumerate(excel_bonds_data):
-            bond_data['row_order'] = row_idx + 1  # Зберігаємо порядок рядка (починаючи з 1)
-            key = create_bond_key(bond_data)
-            excel_keys.add(key)
-            excel_data_by_key[key] = bond_data
-        
-        db_keys = {}
-        for db_bond in db_bonds:
-            bond_data = {
-                'date': db_bond.date,
-                'bond_number': db_bond.bond_number,
-                'operation_type': db_bond.operation_type,
-                'price_per_unit': db_bond.price_per_unit,
-                'quantity': db_bond.quantity,
-                'maturity_date': db_bond.maturity_date,
-                'total_amount': db_bond.total_amount,
-                'platform': db_bond.platform
-            }
-            key = create_bond_key(bond_data)
-            db_keys[key] = db_bond
-        
-        # Підраховуємо зміни
+        # 2. ДОДАЄМО рядки з Excel у ТОЧНОМУ ПОРЯДКУ
         added = 0
-        updated = 0
-        deleted = 0
         errors = []
         
-        logger.info(f"DEBUG: excel_keys count = {len(excel_keys)}")
-        logger.info(f"DEBUG: db_keys count = {len(db_keys)}")
+        for row_idx, bond_data in enumerate(excel_bonds_data):
+            try:
+                new_bond = Bond(
+                    row_order=row_idx + 1,  # Порядок з Excel (1, 2, 3, ...)
+                    date=bond_data.get('date', ''),
+                    operation_type=bond_data.get('operation_type', ''),
+                    bond_number=bond_data.get('bond_number', ''),
+                    maturity_date=bond_data.get('maturity_date', ''),
+                    price_per_unit=float(bond_data.get('price_per_unit', 0)),
+                    quantity=int(bond_data.get('quantity', 0)),
+                    total_amount=float(bond_data.get('total_amount', 0)),
+                    platform=bond_data.get('platform', '')
+                )
+                session.add(new_bond)
+                added += 1
+            except Exception as e:
+                errors.append(f"Помилка рядка {row_idx + 1} ({bond_data.get('bond_number')}): {str(e)}")
         
-        # 1. Додаємо нові та оновлюємо існуючі
-        for key, excel_bond in excel_data_by_key.items():
-            if key in db_keys:
-                # Оновлюємо існуючий запис
-                db_bond = db_keys[key]
-                try:
-                    if (db_bond.maturity_date != excel_bond.get('maturity_date', '') or
-                        db_bond.total_amount != float(excel_bond.get('total_amount', 0)) or
-                        db_bond.platform != excel_bond.get('platform', '')):
-                        
-                        db_bond.maturity_date = excel_bond.get('maturity_date', '')
-                        db_bond.total_amount = float(excel_bond.get('total_amount', 0))
-                        db_bond.platform = excel_bond.get('platform', '')
-                        updated += 1
-                except Exception as e:
-                    errors.append(f"Помилка при оновленні запису {excel_bond.get('bond_number')}: {str(e)}")
-            else:
-                # Додаємо новий запис
-                try:
-                    new_bond = Bond(
-                        row_order=excel_bond.get('row_order', 0),
-                        date=excel_bond.get('date', ''),
-                        operation_type=excel_bond.get('operation_type', ''),
-                        bond_number=excel_bond.get('bond_number', ''),
-                        maturity_date=excel_bond.get('maturity_date', ''),
-                        price_per_unit=float(excel_bond.get('price_per_unit', 0)),
-                        quantity=int(excel_bond.get('quantity', 0)),
-                        total_amount=float(excel_bond.get('total_amount', 0)),
-                        platform=excel_bond.get('platform', '')
-                    )
-                    session.add(new_bond)
-                    added += 1
-                except Exception as e:
-                    errors.append(f"Помилка при додаванні запису {excel_bond.get('bond_number')}: {str(e)}")
-        
-        # 2. Видаляємо записи, яких немає в Excel
-        for key, db_bond in db_keys.items():
-            if key not in excel_keys:
-                try:
-                    session.delete(db_bond)
-                    deleted += 1
-                except Exception as e:
-                    errors.append(f"Помилка при видаленні запису {db_bond.bond_number}: {str(e)}")
-        
-        # Зберігаємо зміни
-        session.commit()
-        session.close()
+        # 3. ЗБЕРІГАЄМО
+        try:
+            session.commit()
+            session.close()
+        except Exception as e:
+            session.rollback()
+            session.close()
+            logger.error(f"Error committing: {e}")
+            await query.edit_message_text(f"❌ Помилка збереження: {str(e)}")
+            return
         
         # Формуємо відповідь
         text = "🔄 *Синхронізація Excel → БД завершена*\n\n"
-        text += f"✅ Додано: {added}\n"
-        text += f"🔄 Оновлено: {updated}\n"
-        text += f"❌ Видалено: {deleted}\n\n"
+        text += f"❌ Видалено: {deleted}\n"
+        text += f"✅ Додано: {added}\n\n"
         
         if errors:
             text += f"⚠️ Помилок: {len(errors)}\n"
-            for error in errors[:5]:  # Показуємо перші 5 помилок
+            for error in errors[:5]:
                 text += f"   • {error}\n"
             if len(errors) > 5:
                 text += f"   • ... та ще {len(errors) - 5} помилок\n"
@@ -1037,7 +987,7 @@ async def sync_bonds_from_sheets(update: Update, context: CallbackContext):
         await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
         
     except Exception as e:
-        logger.error(f"Error syncing from sheets: {e}")
+        logger.error(f"Error in sync_bonds_from_sheets: {e}")
         await query.edit_message_text(f"❌ Помилка синхронізації: {str(e)}")
 
 
