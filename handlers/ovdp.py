@@ -1073,7 +1073,8 @@ async def sync_bonds_from_sheets(update: Update, context: CallbackContext):
                     price_per_unit=float(bond_data.get('price_per_unit', 0)),
                     quantity=int(bond_data.get('quantity', 0)),
                     total_amount=float(bond_data.get('total_amount', 0)),
-                    platform=bond_data.get('platform', '')
+                    platform=bond_data.get('platform', ''),
+                    pnl=float(bond_data.get('pnl', 0))
                 )
                 session.add(new_bond)
                 added += 1

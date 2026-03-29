@@ -187,15 +187,19 @@ async def sync_bonds_to_sheets(update: Update, context: CallbackContext):
             await query.edit_message_text("❌ Помилка: Google Sheets або БД не доступні")
             return
         
+        # Пересчитуємо портфель перед експортом
+        from handlers.ovdp import recalculate_bond_portfolio
+        await recalculate_bond_portfolio(Session)
+        
         session = Session()
         bonds = session.query(Bond).all()
-        session.close()
         
         if not bonds:
+            session.close()
             await query.edit_message_text("📭 Немає даних для синхронізації")
             return
         
-        # Готуємо дані
+        # Готуємо дані записів
         bonds_data = []
         for bond in bonds:
             bonds_data.append({
@@ -206,40 +210,26 @@ async def sync_bonds_to_sheets(update: Update, context: CallbackContext):
                 'price_per_unit': bond.price_per_unit,
                 'quantity': bond.quantity,
                 'total_amount': bond.total_amount,
-                'platform': bond.platform
+                'platform': bond.platform,
+                'pnl': bond.pnl or 0
             })
         
-        # Експортуємо в Google Sheets
+        # Експортуємо записи в Google Sheets
         sheets_manager.export_bonds_to_sheets(bonds_data)
         
-        # Готуємо портфель
-        portfolio = {}
-        for bond in bonds:
-            if bond.bond_number not in portfolio:
-                portfolio[bond.bond_number] = {
-                    'maturity_date': bond.maturity_date,
-                    'total_quantity': 0,
-                    'total_amount': 0
-                }
-            
-            if bond.operation_type == 'купівля':
-                portfolio[bond.bond_number]['total_quantity'] += bond.quantity
-                portfolio[bond.bond_number]['total_amount'] += bond.total_amount
-            else:
-                portfolio[bond.bond_number]['total_quantity'] -= bond.quantity
-                portfolio[bond.bond_number]['total_amount'] -= bond.total_amount
-        
-        portfolio = {k: v for k, v in portfolio.items() if v['total_quantity'] > 0}
+        # Беремо портфель з bond_portfolio
+        from models import BondPortfolio
+        portfolio_records = session.query(BondPortfolio).all()
+        session.close()
         
         portfolio_data = []
-        for bond_num, data in portfolio.items():
-            avg_price = data['total_amount'] / data['total_quantity'] if data['total_quantity'] > 0 else 0
+        for record in portfolio_records:
             portfolio_data.append({
-                'bond_number': bond_num,
-                'maturity_date': data['maturity_date'],
-                'total_quantity': data['total_quantity'],
-                'avg_price': avg_price,
-                'total_amount': data['total_amount']
+                'bond_number': record.bond_number,
+                'maturity_date': record.maturity_date,
+                'total_quantity': record.total_quantity,
+                'avg_price': record.avg_price,
+                'total_amount': record.total_amount
             })
         
         sheets_manager.export_bonds_portfolio(portfolio_data)
