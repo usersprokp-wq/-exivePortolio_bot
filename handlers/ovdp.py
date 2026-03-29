@@ -226,7 +226,7 @@ def calculate_profit_by_price(bonds):
 
 
 async def recalculate_bond_portfolio(Session):
-    """Пересчитати портфель облігацій з записів bonds та заповнити bond_portfolio"""
+    """Пересчитати портфель облігацій з записів bonds (LIFO метод) та заповнити bond_portfolio"""
     try:
         session = Session()
         
@@ -235,50 +235,61 @@ async def recalculate_bond_portfolio(Session):
         session.commit()
         
         # Отримуємо всі записи з bonds
-        bonds = session.query(Bond).all()
+        all_bonds = session.query(Bond).all()
         
-        if not bonds:
+        if not all_bonds:
             session.close()
             return
         
-        # Розраховуємо портфель (простий метод)
-        portfolio = {}
-        for bond in bonds:
-            if bond.bond_number not in portfolio:
-                portfolio[bond.bond_number] = {
-                    'total_quantity': 0,
-                    'total_amount': 0,
+        # LIFO метод розрахунку портфеля з лотами (Last In First Out)
+        from collections import defaultdict
+        portfolio_lots = defaultdict(list)  # bond_number -> список лотів (quantity, price, total)
+        
+        # Сортуємо по row_order для правильного LIFO
+        sorted_bonds = sorted(all_bonds, key=lambda x: x.row_order if x.row_order and x.row_order > 0 else float('inf'))
+        
+        for bond in sorted_bonds:
+            if bond.operation_type == 'купівля':
+                portfolio_lots[bond.bond_number].append({
+                    'quantity': bond.quantity,
+                    'price': bond.price_per_unit,
+                    'total': bond.total_amount,
                     'maturity_date': bond.maturity_date,
                     'platform': bond.platform
-                }
-            
-            if bond.operation_type == 'купівля':
-                portfolio[bond.bond_number]['total_quantity'] += bond.quantity
-                portfolio[bond.bond_number]['total_amount'] += bond.total_amount
+                })
             else:  # продаж
-                portfolio[bond.bond_number]['total_quantity'] -= bond.quantity
-                portfolio[bond.bond_number]['total_amount'] -= bond.total_amount
+                remaining = bond.quantity
+                while remaining > 0 and portfolio_lots[bond.bond_number]:
+                    lot = portfolio_lots[bond.bond_number][-1]  # LIFO - беремо з кінця (останню купівлю)
+                    if lot['quantity'] <= remaining:
+                        remaining -= lot['quantity']
+                        portfolio_lots[bond.bond_number].pop(-1)
+                    else:
+                        lot['quantity'] -= remaining
+                        lot['total'] -= (remaining * lot['price'])
+                        remaining = 0
         
-        # Залишаємо тільки активні позиції
-        portfolio = {k: v for k, v in portfolio.items() if v['total_quantity'] > 0}
-        
-        # Зберігаємо в bond_portfolio
-        for bond_num, data in portfolio.items():
-            avg_price = data['total_amount'] / data['total_quantity'] if data['total_quantity'] > 0 else 0
-            portfolio_record = BondPortfolio(
-                bond_number=bond_num,
-                maturity_date=data['maturity_date'],
-                total_quantity=data['total_quantity'],
-                total_amount=data['total_amount'],
-                avg_price=avg_price,
-                platform=data['platform'],
-                last_update=datetime.now().isoformat()
-            )
-            session.add(portfolio_record)
+        # Конвертуємо лоти в портфель і зберігаємо в bond_portfolio
+        for bond_num, lots in portfolio_lots.items():
+            if lots:  # Якщо є залишки
+                total_qty = sum(lot['quantity'] for lot in lots)
+                total_amount = sum(lot['total'] for lot in lots)
+                avg_price = total_amount / total_qty if total_qty > 0 else 0
+                
+                portfolio_record = BondPortfolio(
+                    bond_number=bond_num,
+                    maturity_date=lots[0]['maturity_date'],
+                    total_quantity=total_qty,
+                    total_amount=total_amount,
+                    avg_price=avg_price,
+                    platform=lots[0]['platform'],
+                    last_update=datetime.now().isoformat()
+                )
+                session.add(portfolio_record)
         
         session.commit()
         session.close()
-        logger.info(f"Портфель облігацій пересчитаний: {len(portfolio)} активних позицій")
+        logger.info(f"Портфель облігацій пересчитаний (LIFO метод): {len(portfolio_lots)} активних позицій")
         
     except Exception as e:
         logger.error(f"Error recalculating bond portfolio: {e}")
@@ -714,7 +725,7 @@ async def show_bonds_list(update: Update, context: CallbackContext, page=1):
 
 
 async def show_bonds_portfolio(update: Update, context: CallbackContext, platform=None):
-    """Показати портфель облігацій"""
+    """Показати портфель облігацій з таблиці bond_portfolio"""
     query = update.callback_query
     await query.answer()
     
@@ -725,81 +736,49 @@ async def show_bonds_portfolio(update: Update, context: CallbackContext, platfor
             return
         
         session = Session()
-        all_bonds = session.query(Bond).all()
+        # Беремо дані прямо з таблиці bond_portfolio
+        portfolio_records = session.query(BondPortfolio).order_by(BondPortfolio.last_update.desc()).all()
         session.close()
         
-        # LIFO метод розрахунку портфеля з лотами (Last In First Out)
-        from collections import defaultdict
-        portfolio_lots = defaultdict(list)  # bond_number -> список лотів (quantity, price, total)
-        
-        # Сортуємо по row_order для правильного LIFO
-        sorted_bonds = sorted(all_bonds, key=lambda x: x.row_order if x.row_order and x.row_order > 0 else float('inf'))
-        
-        for bond in sorted_bonds:
-            if bond.operation_type == 'купівля':
-                portfolio_lots[bond.bond_number].append({
-                    'quantity': bond.quantity,
-                    'price': bond.price_per_unit,
-                    'total': bond.total_amount,
-                    'maturity_date': bond.maturity_date,
-                    'platform': bond.platform
-                })
-            else:  # продаж
-                remaining = bond.quantity
-                while remaining > 0 and portfolio_lots[bond.bond_number]:
-                    lot = portfolio_lots[bond.bond_number][-1]  # LIFO - беремо з кінця (останню купівлю)
-                    if lot['quantity'] <= remaining:
-                        remaining -= lot['quantity']
-                        portfolio_lots[bond.bond_number].pop(-1)
-                    else:
-                        lot['quantity'] -= remaining
-                        lot['total'] -= (remaining * lot['price'])
-                        remaining = 0
-        
-        # Конвертуємо лоти в портфель
-        portfolio = {}
-        for bond_num, lots in portfolio_lots.items():
-            if lots:  # Якщо є залишки
-                total_qty = sum(lot['quantity'] for lot in lots)
-                total_amount = sum(lot['total'] for lot in lots)
-                portfolio[bond_num] = {
-                    'maturity_date': lots[0]['maturity_date'],
-                    'total_quantity': total_qty,
-                    'total_amount': total_amount,
-                    'platform': lots[0]['platform'],
-                    'lots': lots
-                }
-        
-        if platform:
-            platform_name = platform.upper()
-            portfolio = {k: v for k, v in portfolio.items() if v['platform'].upper() == platform_name}
-        
-        if not portfolio:
+        if not portfolio_records:
             keyboard = [
                 [InlineKeyboardButton("🏦 ICU", callback_data='portfolio_icu'),
                  InlineKeyboardButton("🏦 SENSBANK", callback_data='portfolio_sensbank')],
                 [InlineKeyboardButton("🔙 Назад", callback_data='ovdp')]
             ]
-            platform_name = platform.upper() if platform else ''
-            await query.edit_message_text(f"📭 Немає куплених ОВДП для платформи {platform_name}", reply_markup=InlineKeyboardMarkup(keyboard))
+            await query.edit_message_text("📭 Портфель пустий", reply_markup=InlineKeyboardMarkup(keyboard))
             return
+        
+        # Фільтруємо по платформі якщо вибрана
+        if platform:
+            platform = platform.upper()
+            portfolio_records = [p for p in portfolio_records if p.platform.upper() == platform]
+            if not portfolio_records:
+                keyboard = [
+                    [InlineKeyboardButton("💹 Взнати PnL", callback_data='pnl_portfolio')],
+                    [InlineKeyboardButton("🏦 Всі", callback_data='ovdp_portfolio'),
+                     InlineKeyboardButton("🏦 ICU", callback_data='portfolio_icu'),
+                     InlineKeyboardButton("🏦 SENSBANK", callback_data='portfolio_sensbank')],
+                    [InlineKeyboardButton("🔙 Назад", callback_data='ovdp')]
+                ]
+                await query.edit_message_text(f"📭 Немає облігацій для платформи {platform}", reply_markup=InlineKeyboardMarkup(keyboard))
+                return
         
         title = f"💼 *Портфель ОВДП*"
         if platform:
-            title += f" - {platform.upper()}"
+            title += f" - {platform}"
         text = f"{title}\n\n"
         total_invested = 0
         total_quantity = 0
         
-        for num, data in portfolio.items():
-            avg_price = data['total_amount'] / data['total_quantity'] if data['total_quantity'] > 0 else 0
-            text += f"🔢 *{num}*\n"
-            text += f"   📆 Термін: {data['maturity_date']}\n"
-            text += f"   📦 Кількість: {data['total_quantity']} шт\n"
-            text += f"   💰 Середня ціна: {avg_price:.2f} грн\n"
-            text += f"   💵 Сума: {data['total_amount']:.2f} грн\n\n"
-            total_invested += data['total_amount']
-            total_quantity += data['total_quantity']
+        for record in portfolio_records:
+            text += f"🔢 *{record.bond_number}*\n"
+            text += f"   📆 Термін: {record.maturity_date}\n"
+            text += f"   📦 Кількість: {record.total_quantity} шт\n"
+            text += f"   💰 Середня ціна: {record.avg_price:.2f} грн\n"
+            text += f"   💵 Сума: {record.total_amount:.2f} грн\n\n"
+            total_invested += record.total_amount
+            total_quantity += record.total_quantity
         
         text += f"━━━━━━━━━━━━━━━━━━━━\n"
         text += f"📊 *Всього інвестовано:* {total_invested:.2f} грн\n"
@@ -823,6 +802,8 @@ async def show_bonds_portfolio(update: Update, context: CallbackContext, platfor
         await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
         
     except Exception as e:
+        logger.error(f"Error showing bonds portfolio: {e}")
+        await query.edit_message_text(f"❌ Помилка: {str(e)}")
         await query.edit_message_text(f"❌ Помилка: {str(e)}")
 
 
