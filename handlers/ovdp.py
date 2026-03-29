@@ -552,11 +552,11 @@ async def show_bonds_portfolio(update: Update, context: CallbackContext, platfor
         all_bonds = session.query(Bond).all()
         session.close()
         
-        # FIFO метод розрахунку портфеля з лотами
+        # LIFO метод розрахунку портфеля з лотами (Last In First Out)
         from collections import defaultdict
         portfolio_lots = defaultdict(list)  # bond_number -> список лотів (quantity, price, total)
         
-        # Сортуємо по row_order для правильного FIFO
+        # Сортуємо по row_order для правильного LIFO
         sorted_bonds = sorted(all_bonds, key=lambda x: x.row_order if x.row_order and x.row_order > 0 else float('inf'))
         
         for bond in sorted_bonds:
@@ -571,10 +571,10 @@ async def show_bonds_portfolio(update: Update, context: CallbackContext, platfor
             else:  # продаж
                 remaining = bond.quantity
                 while remaining > 0 and portfolio_lots[bond.bond_number]:
-                    lot = portfolio_lots[bond.bond_number][0]
+                    lot = portfolio_lots[bond.bond_number][-1]  # LIFO - беремо з кінця (останню купівлю)
                     if lot['quantity'] <= remaining:
                         remaining -= lot['quantity']
-                        portfolio_lots[bond.bond_number].pop(0)
+                        portfolio_lots[bond.bond_number].pop(-1)
                     else:
                         lot['quantity'] -= remaining
                         lot['total'] -= (remaining * lot['price'])
