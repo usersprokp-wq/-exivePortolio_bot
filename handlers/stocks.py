@@ -45,6 +45,10 @@ async def button_handler_stocks(update: Update, context: CallbackContext):
         platform = query.data.replace('stock_platform_', '')
         context.user_data['platform'] = platform.upper()
         await save_stock(update, context)
+    elif query.data == 'portfolio_ff':
+        await show_stocks_portfolio(update, context, platform='FF')
+    elif query.data == 'portfolio_ib':
+        await show_stocks_portfolio(update, context, platform='IB')
 
 
 async def show_stocks_menu(update: Update, context: CallbackContext):
@@ -308,6 +312,7 @@ async def show_stocks_portfolio(update: Update, context: CallbackContext, platfo
         
         # Фільтруємо по біржі якщо вибрана
         if platform:
+            platform = platform.upper()  # Привести до великих літер
             portfolio = {k: v for k, v in portfolio.items() if v['platform'] == platform}
             if not portfolio:
                 keyboard = [
