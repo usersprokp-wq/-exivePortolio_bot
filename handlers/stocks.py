@@ -8,6 +8,63 @@ from models import Stock, StockPortfolio
 logger = logging.getLogger(__name__)
 
 
+async def recalculate_portfolio(Session):
+    """Пересчитати портфель з записів stocks та заповнити stock_portfolio"""
+    try:
+        session = Session()
+        
+        # Видаляємо старі дані
+        session.query(StockPortfolio).delete()
+        session.commit()
+        
+        # Отримуємо всі записи з stocks
+        stocks = session.query(Stock).all()
+        
+        if not stocks:
+            session.close()
+            return
+        
+        # Розраховуємо портфель
+        portfolio = {}
+        for stock in stocks:
+            if stock.ticker not in portfolio:
+                portfolio[stock.ticker] = {
+                    'total_quantity': 0,
+                    'total_amount': 0,
+                    'platform': stock.platform
+                }
+            
+            if stock.operation_type == 'купівля':
+                portfolio[stock.ticker]['total_quantity'] += stock.quantity
+                portfolio[stock.ticker]['total_amount'] += stock.total_amount
+            else:  # продаж
+                portfolio[stock.ticker]['total_quantity'] -= stock.quantity
+                portfolio[stock.ticker]['total_amount'] -= stock.total_amount
+        
+        # Залишаємо тільки активні позиції
+        portfolio = {k: v for k, v in portfolio.items() if v['total_quantity'] > 0}
+        
+        # Зберігаємо в stock_portfolio
+        for ticker, data in portfolio.items():
+            avg_price = data['total_amount'] / data['total_quantity'] if data['total_quantity'] > 0 else 0
+            portfolio_record = StockPortfolio(
+                ticker=ticker,
+                total_quantity=data['total_quantity'],
+                total_amount=data['total_amount'],
+                avg_price=avg_price,
+                platform=data['platform'],
+                last_update=datetime.now().isoformat()
+            )
+            session.add(portfolio_record)
+        
+        session.commit()
+        session.close()
+        logger.info(f"Портфель пересчитаний: {len(portfolio)} активних позицій")
+        
+    except Exception as e:
+        logger.error(f"Error recalculating portfolio: {e}")
+
+
 async def button_handler_stocks(update: Update, context: CallbackContext):
     """Обробник кнопок для Акцій"""
     query = update.callback_query
@@ -49,6 +106,11 @@ async def button_handler_stocks(update: Update, context: CallbackContext):
         await show_stocks_portfolio(update, context, platform='FF')
     elif query.data == 'portfolio_ib':
         await show_stocks_portfolio(update, context, platform='IB')
+    elif query.data == 'stocks_recalc_portfolio':
+        await query.edit_message_text("⏳ Пересчитую портфель...")
+        Session = context.bot_data.get('Session')
+        await recalculate_portfolio(Session)
+        await query.edit_message_text("✅ Портфель пересчитаний!\n\n📋 Дані збережені в БД.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data='stocks')]]))
 
 
 async def show_stocks_menu(update: Update, context: CallbackContext):
@@ -61,6 +123,7 @@ async def show_stocks_menu(update: Update, context: CallbackContext):
         [InlineKeyboardButton("💼 Портфель", callback_data='stocks_portfolio')],
         [InlineKeyboardButton("📊 Статистика", callback_data='stocks_stats')],
         [InlineKeyboardButton("💰 Прибуток", callback_data='stocks_profit')],
+        [InlineKeyboardButton("🔄 Пересчет портфеля", callback_data='stocks_recalc_portfolio')],
         [InlineKeyboardButton("🔙 Назад", callback_data='back_to_menu')]
     ]
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
@@ -559,7 +622,15 @@ async def sync_stocks_from_sheets(update: Update, context: CallbackContext):
             if len(errors) > 5:
                 text += f"   • ... та ще {len(errors) - 5} помилок\n"
         else:
-            text += "✨ Без помилок!"
+            text += "✨ Без помилок!\n\n"
+        
+        # Пересчитуємо портфель
+        text += "⏳ Пересчитую портфель..."
+        await query.edit_message_text(text, parse_mode='Markdown')
+        
+        await recalculate_portfolio(Session)
+        
+        text += "\n✅ Портфель оновлено!"
         
         keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data='stocks')]]
         await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
