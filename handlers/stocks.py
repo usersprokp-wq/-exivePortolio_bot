@@ -247,9 +247,8 @@ async def show_stocks_list(update: Update, context: CallbackContext):
         
         text = f"📋 *Мої записи Акцій*\n\n"
         for stock in stocks:
-            text += f"📅 {stock.date} | "
-            text += f"{'🟢' if stock.operation_type == 'купівля' else '🔴'} {stock.operation_type}\n"
-            text += f"   📈 {stock.ticker} | {stock.name} | 💰 {stock.total_amount:.2f} грн | {stock.platform}\n\n"
+            text += f"📅 {stock.date} | {'🟢' if stock.operation_type == 'купівля' else '🔴'} {stock.operation_type} | {stock.platform}\n"
+            text += f"   📈 {stock.ticker} | {stock.quantity} шт | {stock.total_amount:.2f} $\n\n"
         
         keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data='stocks')]]
         await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
