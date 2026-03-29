@@ -177,3 +177,106 @@ class GoogleSheetsManager:
         except Exception as e:
             logger.error(f"Error importing from sheets: {e}")
             raise
+    
+    def export_stocks_to_sheets(self, stocks_data):
+        """Експортує дані Акцій в Google Sheets (вкладка Акції-Записи)"""
+        try:
+            worksheet = self.get_or_create_worksheet("Акції-Записи")
+            worksheet.clear()
+            
+            if not stocks_data:
+                return
+            
+            headers = ['Дата', 'Платформа', 'Тип операції', 'Тікер', 'Ціна за шт', 'Кількість', 'Комісія', 'Сума', 'P&L']
+            worksheet.append_row(headers)
+            
+            for stock in stocks_data:
+                row = [
+                    stock.get('date', ''),
+                    stock.get('platform', ''),
+                    stock.get('operation_type', ''),
+                    stock.get('ticker', ''),
+                    stock.get('price_per_unit', ''),
+                    stock.get('quantity', ''),
+                    stock.get('commission', ''),
+                    stock.get('total_amount', ''),
+                    stock.get('pnl', '')
+                ]
+                worksheet.append_row(row)
+            
+            logger.info(f"Exported {len(stocks_data)} stocks to worksheet 'Акції-Записи'")
+            return True
+        except Exception as e:
+            logger.error(f"Error exporting stocks to sheets: {e}")
+            raise
+    
+    def export_stocks_portfolio(self, portfolio_data):
+        """Експортує портфель Акцій в Google Sheets (вкладка Акції-Портфель)"""
+        try:
+            worksheet = self.get_or_create_worksheet("Акції-Портфель")
+            worksheet.clear()
+            
+            if not portfolio_data:
+                return
+            
+            headers = ['Тікер', 'Кількість', 'Ціна за шт', 'Сума', 'Біржа', '%']
+            worksheet.append_row(headers)
+            
+            for item in portfolio_data:
+                row = [
+                    item.get('ticker', ''),
+                    item.get('total_quantity', 0),
+                    item.get('avg_price', 0),
+                    item.get('total_amount', 0),
+                    item.get('platform', ''),
+                    item.get('pnl_percent', 0)
+                ]
+                worksheet.append_row(row)
+            
+            logger.info(f"Exported portfolio to worksheet 'Акції-Портфель'")
+            return True
+        except Exception as e:
+            logger.error(f"Error exporting stocks portfolio to sheets: {e}")
+            raise
+    
+    def import_stocks_from_sheets(self):
+        """Імпортує дані Акцій з Google Sheets (вкладка Акції-Записи)"""
+        try:
+            worksheet = self.get_or_create_worksheet("Акції-Записи")
+            all_rows = worksheet.get_all_values()
+            
+            logger.info(f"DEBUG: all_rows count = {len(all_rows)}")
+            
+            if not all_rows or len(all_rows) < 2:
+                logger.warning(f"No data in Акції-Записи sheet. Rows: {len(all_rows) if all_rows else 0}")
+                return []
+            
+            stocks_data = []
+            
+            for idx, row in enumerate(all_rows[1:]):
+                if not any(row):
+                    logger.debug(f"Skipping empty row {idx}")
+                    continue
+                
+                try:
+                    stock_dict = {
+                        'date': row[0] if len(row) > 0 else '',
+                        'platform': row[1] if len(row) > 1 else '',
+                        'operation_type': row[2] if len(row) > 2 else '',
+                        'ticker': row[3] if len(row) > 3 else '',
+                        'price_per_unit': float(row[4].replace(',', '.')) if len(row) > 4 and row[4] else 0,
+                        'quantity': int(row[5]) if len(row) > 5 and row[5] else 0,
+                        'commission': float(row[6].replace(',', '.')) if len(row) > 6 and row[6] else 0,
+                        'total_amount': float(row[7].replace(',', '.')) if len(row) > 7 and row[7] else 0,
+                        'pnl': float(row[8].replace(',', '.')) if len(row) > 8 and row[8] else 0
+                    }
+                    stocks_data.append(stock_dict)
+                except (ValueError, IndexError) as e:
+                    logger.warning(f"Error parsing row {idx}: {e}, row={row}")
+                    continue
+            
+            logger.info(f"Imported {len(stocks_data)} stocks from worksheet 'Акції-Записи'")
+            return stocks_data
+        except Exception as e:
+            logger.error(f"Error importing stocks from sheets: {e}")
+            raise
