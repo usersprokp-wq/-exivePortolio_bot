@@ -749,17 +749,22 @@ async def save_bond(update: Update, context: CallbackContext):
         
         operation_type = context.user_data['bond_operation_type']
         pnl = context.user_data.get('pnl', 0) if operation_type == 'продаж' else 0
+        bond_number = context.user_data['bond_number']
+        quantity = context.user_data['quantity']
+        total_amount = context.user_data['total_amount']
+        platform = context.user_data['platform']
+        maturity_date = context.user_data['maturity_date']
         
         session = Session()
         bond = Bond(
             date=context.user_data['bond_date'],
             operation_type=operation_type,
-            bond_number=context.user_data['bond_number'],
-            maturity_date=context.user_data['maturity_date'],
+            bond_number=bond_number,
+            maturity_date=maturity_date,
             price_per_unit=context.user_data['price_per_unit'],
-            quantity=context.user_data['quantity'],
-            total_amount=context.user_data['total_amount'],
-            platform=context.user_data['platform'],
+            quantity=quantity,
+            total_amount=total_amount,
+            platform=platform,
             pnl=pnl
         )
         session.add(bond)
@@ -768,26 +773,58 @@ async def save_bond(update: Update, context: CallbackContext):
         profit_record = ProfitRecord(
             operation_date=context.user_data['bond_date'],
             operation_type=operation_type,
-            amount=context.user_data['total_amount']
+            amount=total_amount
         )
         session.add(profit_record)
         session.commit()
-        session.close()
         
-        # Пересчитуємо портфель
-        await recalculate_bond_portfolio(Session)
+        # Точкове оновлення портфеля — тільки ця облігація
+        portfolio = session.query(BondPortfolio).filter(BondPortfolio.bond_number == bond_number).first()
+        
+        if operation_type == 'купівля':
+            if not portfolio:
+                portfolio = BondPortfolio(
+                    bond_number=bond_number,
+                    maturity_date=maturity_date,
+                    total_quantity=quantity,
+                    total_amount=total_amount,
+                    avg_price=total_amount / quantity if quantity > 0 else 0,
+                    platform=platform,
+                    last_update=datetime.now().isoformat()
+                )
+                session.add(portfolio)
+            else:
+                portfolio.total_quantity += quantity
+                portfolio.total_amount += total_amount
+                portfolio.avg_price = portfolio.total_amount / portfolio.total_quantity if portfolio.total_quantity > 0 else 0
+                portfolio.last_update = datetime.now().isoformat()
+        
+        elif operation_type == 'продаж':
+            if portfolio:
+                portfolio.total_quantity -= quantity
+                # Віднімаємо по середній ціні купівлі
+                portfolio.total_amount -= (context.user_data['sell_avg_price'] * quantity)
+                
+                if portfolio.total_quantity <= 0:
+                    session.delete(portfolio)
+                else:
+                    portfolio.avg_price = portfolio.total_amount / portfolio.total_quantity if portfolio.total_quantity > 0 else 0
+                    portfolio.last_update = datetime.now().isoformat()
+        
+        session.commit()
+        session.close()
         
         # Формуємо повідомлення
         text = (
             f"✅ *Запис додано!*\n\n"
             f"📅 Дата: {context.user_data['bond_date']}\n"
             f"📈 Операція: {operation_type.capitalize()}\n"
-            f"🔢 Номер: {context.user_data['bond_number']}\n"
-            f"📆 Термін погашення: {context.user_data['maturity_date']}\n"
+            f"🔢 Номер: {bond_number}\n"
+            f"📆 Термін погашення: {maturity_date}\n"
             f"💵 Ціна за шт: {context.user_data['price_per_unit']:.2f} грн\n"
-            f"📦 Кількість: {context.user_data['quantity']} шт\n"
-            f"💰 Сума: {context.user_data['total_amount']:.2f} грн\n"
-            f"🏦 Платформа: {context.user_data['platform']}"
+            f"📦 Кількість: {quantity} шт\n"
+            f"💰 Сума: {total_amount:.2f} грн\n"
+            f"🏦 Платформа: {platform}"
         )
         
         if operation_type == 'продаж':

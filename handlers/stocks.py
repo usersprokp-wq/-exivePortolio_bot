@@ -258,36 +258,71 @@ async def save_stock(update: Update, context: CallbackContext):
         operation_type = context.user_data['stock_operation_type']
         commission = context.user_data.get('commission', 0)
         pnl = context.user_data.get('pnl', 0) if operation_type == 'продаж' else 0
+        ticker = context.user_data['ticker']
+        quantity = context.user_data['quantity']
+        total_amount = context.user_data['total_amount']
+        platform = context.user_data['platform']
         
         stock = Stock(
             date=context.user_data['stock_date'],
             operation_type=operation_type,
-            ticker=context.user_data['ticker'],
-            name=context.user_data['ticker'],
+            ticker=ticker,
+            name=ticker,
             price_per_unit=context.user_data['price_per_unit'],
-            quantity=context.user_data['quantity'],
-            total_amount=context.user_data['total_amount'],
-            platform=context.user_data['platform'],
+            quantity=quantity,
+            total_amount=total_amount,
+            platform=platform,
             pnl=pnl
         )
         session.add(stock)
         session.commit()
-        session.close()
         
-        # Пересчитуємо портфель
-        await recalculate_portfolio(Session)
+        # Точкове оновлення портфеля — тільки цей тікер
+        portfolio = session.query(StockPortfolio).filter(StockPortfolio.ticker == ticker).first()
+        
+        if operation_type == 'купівля':
+            if not portfolio:
+                portfolio = StockPortfolio(
+                    ticker=ticker,
+                    total_quantity=quantity,
+                    total_amount=total_amount,
+                    avg_price=total_amount / quantity if quantity > 0 else 0,
+                    platform=platform,
+                    last_update=datetime.now().isoformat()
+                )
+                session.add(portfolio)
+            else:
+                portfolio.total_quantity += quantity
+                portfolio.total_amount += total_amount
+                portfolio.avg_price = portfolio.total_amount / portfolio.total_quantity if portfolio.total_quantity > 0 else 0
+                portfolio.last_update = datetime.now().isoformat()
+        
+        elif operation_type == 'продаж':
+            if portfolio:
+                portfolio.total_quantity -= quantity
+                # Віднімаємо по середній ціні купівлі, а не по ціні продажу
+                portfolio.total_amount -= (context.user_data['sell_avg_price'] * quantity)
+                
+                if portfolio.total_quantity <= 0:
+                    session.delete(portfolio)
+                else:
+                    portfolio.avg_price = portfolio.total_amount / portfolio.total_quantity if portfolio.total_quantity > 0 else 0
+                    portfolio.last_update = datetime.now().isoformat()
+        
+        session.commit()
+        session.close()
         
         # Формуємо повідомлення
         text = (
             f"✅ *Запис додано!*\n\n"
             f"📅 Дата: {context.user_data['stock_date']}\n"
             f"📊 Операція: {operation_type.capitalize()}\n"
-            f"📈 Тікер: {context.user_data['ticker']}\n"
+            f"📈 Тікер: {ticker}\n"
             f"💵 Ціна за шт: {context.user_data['price_per_unit']:.3f} $\n"
-            f"📦 Кількість: {context.user_data['quantity']} шт\n"
-            f"💰 Загальна сума: {context.user_data['total_amount']:.2f} $\n"
+            f"📦 Кількість: {quantity} шт\n"
+            f"💰 Загальна сума: {total_amount:.2f} $\n"
             f"💸 Комісія: {commission:.2f} $\n"
-            f"📊 Біржа: {context.user_data['platform']}"
+            f"📊 Біржа: {platform}"
         )
         
         if operation_type == 'продаж':
@@ -320,7 +355,7 @@ async def show_stocks_list(update: Update, context: CallbackContext):
             return
         
         session = Session()
-        stocks = session.query(Stock).order_by(Stock.id.desc()).all()
+        stocks = session.query(Stock).order_by(Stock.row_order.asc()).all()
         session.close()
         
         if not stocks:
@@ -534,13 +569,23 @@ async def sync_stocks_from_sheets(update: Update, context: CallbackContext):
             logger.error(f"Error deleting stocks: {e}")
             deleted = 0
         
-        # 2. ДОДАЄМО рядки з Excel у ТОЧНОМУ ПОРЯДКУ
+        # 2. Сортуємо по даті (нові спочатку)
+        def parse_date_for_sort(stock_data):
+            try:
+                return datetime.strptime(str(stock_data.get('date', '')).strip(), '%d.%m.%Y')
+            except:
+                return datetime.min
+        
+        excel_stocks_data.sort(key=parse_date_for_sort, reverse=True)
+        
+        # 3. ДОДАЄМО рядки в БД з row_order
         added = 0
         errors = []
         
         for row_idx, stock_data in enumerate(excel_stocks_data):
             try:
                 new_stock = Stock(
+                    row_order=row_idx + 1,
                     date=stock_data.get('date', ''),
                     operation_type=stock_data.get('operation_type', ''),
                     ticker=stock_data.get('ticker', ''),
