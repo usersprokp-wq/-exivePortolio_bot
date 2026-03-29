@@ -61,6 +61,7 @@ class Stock(Base):
     """Модель для акцій"""
     __tablename__ = 'stocks'
     id = Column(Integer, primary_key=True)
+    row_order = Column(Integer, default=0)  # Порядок рядка для сортування
     date = Column(String(50))
     operation_type = Column(String(20))  # 'купівля' або 'продаж'
     ticker = Column(String(20))
