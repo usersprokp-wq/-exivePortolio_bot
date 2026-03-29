@@ -187,7 +187,7 @@ class GoogleSheetsManager:
             if not stocks_data:
                 return
             
-            headers = ['Дата', 'Платформа', 'Тип операції', 'Тікер', 'Ціна за шт', 'Кількість', 'Комісія', 'Сума', 'P&L']
+            headers = ['Дата', 'Платформа', 'Тип операції', 'Тікер', 'Ціна за шт', 'Кількість', 'Сума', 'P&L']
             worksheet.append_row(headers)
             
             for stock in stocks_data:
@@ -198,7 +198,6 @@ class GoogleSheetsManager:
                     stock.get('ticker', ''),
                     stock.get('price_per_unit', ''),
                     stock.get('quantity', ''),
-                    stock.get('commission', ''),
                     stock.get('total_amount', ''),
                     stock.get('pnl', '')
                 ]

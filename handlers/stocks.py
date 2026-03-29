@@ -359,7 +359,6 @@ async def sync_stocks_to_sheets(update: Update, context: CallbackContext):
                 'name': stock.ticker,
                 'price_per_unit': stock.price_per_unit,
                 'quantity': stock.quantity,
-                'commission': 0,  # Комісія вже включена в price_per_unit та total_amount
                 'total_amount': stock.total_amount,
                 'pnl': 0
             })
