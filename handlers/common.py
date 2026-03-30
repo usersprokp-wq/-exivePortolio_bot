@@ -203,7 +203,7 @@ async def sync_bonds_to_sheets(update: Update, context: CallbackContext):
             except:
                 return dt.min
         
-        bonds = sorted(bonds, key=lambda x: parse_date(x.date), reverse=True)
+        bonds = sorted(bonds, key=lambda x: parse_date(x.date), reverse=False)
         
         # Готуємо дані записів
         bonds_data = []

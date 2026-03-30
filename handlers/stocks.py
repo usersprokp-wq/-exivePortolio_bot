@@ -408,13 +408,22 @@ async def show_stocks_list(update: Update, context: CallbackContext, page=1):
             return
         
         session = Session()
-        stocks = session.query(Stock).order_by(Stock.row_order.asc()).all()
+        stocks = session.query(Stock).all()
         session.close()
         
         if not stocks:
             keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data='stocks')]]
             await query.edit_message_text("📭 Немає записів", reply_markup=InlineKeyboardMarkup(keyboard))
             return
+        
+        # Сортуємо по даті: нові спочатку
+        def parse_date(date_str):
+            try:
+                return datetime.strptime(str(date_str).strip(), '%d.%m.%Y')
+            except:
+                return datetime.min
+        
+        stocks.sort(key=lambda x: (parse_date(x.date), x.id), reverse=True)
         
         # Пагінація — по 10 записів на сторінку
         records_per_page = 10
