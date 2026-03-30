@@ -195,6 +195,16 @@ async def sync_bonds_to_sheets(update: Update, context: CallbackContext):
             await query.edit_message_text("📭 Немає даних для синхронізації")
             return
         
+        # Сортуємо по даті: нові спочатку
+        from datetime import datetime as dt
+        def parse_date(date_str):
+            try:
+                return dt.strptime(str(date_str).strip(), '%d.%m.%Y')
+            except:
+                return dt.min
+        
+        bonds = sorted(bonds, key=lambda x: parse_date(x.date), reverse=True)
+        
         # Готуємо дані записів
         bonds_data = []
         for bond in bonds:
