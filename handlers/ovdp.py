@@ -276,11 +276,29 @@ async def recalculate_bond_portfolio(Session):
                 session.add(portfolio_record)
         
         session.commit()
+        
+        # Перераховуємо процентовку
+        recalculate_bond_percents(session)
+        
         session.close()
         logger.info(f"Портфель облігацій пересчитаний: {len(portfolio_data)} позицій")
         
     except Exception as e:
         logger.error(f"Error recalculating bond portfolio: {e}")
+
+
+def recalculate_bond_percents(session):
+    """Перераховує % кожної облігації від загальної суми портфеля"""
+    try:
+        all_records = session.query(BondPortfolio).all()
+        total_sum = sum(r.total_amount for r in all_records) if all_records else 0
+        
+        for record in all_records:
+            record.percent = (record.total_amount / total_sum * 100) if total_sum > 0 else 0
+        
+        session.commit()
+    except Exception as e:
+        logger.error(f"Error recalculating bond percents: {e}")
 
 
 async def button_handler_ovdp(update: Update, context: CallbackContext):
@@ -333,6 +351,35 @@ async def button_handler_ovdp(update: Update, context: CallbackContext):
         await show_pnl_portfolio(update, context)
     elif query.data == 'sync_sheets_to_db':
         await sync_bonds_from_sheets(update, context)
+    elif query.data == 'ovdp_update_balance':
+        text = "💵 *Оновити залишок*\n\nОберіть платформу:"
+        keyboard = [
+            [InlineKeyboardButton("🏦 ICU", callback_data='ovdp_balance_platform_icu')],
+            [InlineKeyboardButton("🏦 SENSBANK", callback_data='ovdp_balance_platform_sensbank')],
+            [InlineKeyboardButton("🔙 Назад", callback_data='ovdp_portfolio')]
+        ]
+        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+    elif query.data.startswith('ovdp_balance_platform_'):
+        platform = query.data.replace('ovdp_balance_platform_', '').upper()
+        context.user_data['ovdp_balance_platform'] = platform
+        context.user_data['bond_step'] = 'ovdp_balance_amount'
+        ticker = f"{platform}uah"
+        
+        Session = context.bot_data.get('Session')
+        if Session:
+            session = Session()
+            current = session.query(BondPortfolio).filter(BondPortfolio.bond_number == ticker).first()
+            session.close()
+            current_amount = current.total_amount if current else 0
+        else:
+            current_amount = 0
+        
+        await query.edit_message_text(
+            f"💵 *Залишок {platform}*\n\n"
+            f"Поточний залишок: {current_amount:.2f} грн\n\n"
+            f"Введіть нову суму залишку:",
+            parse_mode='Markdown'
+        )
 
 
 async def show_ovdp_menu(update: Update, context: CallbackContext):
@@ -718,6 +765,63 @@ async def handle_message_ovdp(update: Update, context: CallbackContext):
                 
             except ValueError:
                 await update.message.reply_text("❌ Будь ласка, введіть коректне число")
+        
+        elif step == 'ovdp_balance_amount':
+            try:
+                amount = float(user_message)
+                if amount < 0:
+                    await update.message.reply_text("❌ Сума має бути 0 або більше")
+                    return
+                
+                Session = context.bot_data.get('Session')
+                if not Session:
+                    await update.message.reply_text("❌ Помилка підключення до бази даних")
+                    return
+                
+                platform = context.user_data['ovdp_balance_platform']
+                ticker = f"{platform}uah"
+                
+                session = Session()
+                record = session.query(BondPortfolio).filter(BondPortfolio.bond_number == ticker).first()
+                
+                if record:
+                    record.total_amount = amount
+                    record.avg_price = amount
+                    record.last_update = datetime.now().isoformat()
+                else:
+                    record = BondPortfolio(
+                        bond_number=ticker,
+                        maturity_date='',
+                        total_quantity=1,
+                        total_amount=amount,
+                        avg_price=amount,
+                        platform=platform,
+                        percent=0,
+                        last_update=datetime.now().isoformat()
+                    )
+                    session.add(record)
+                
+                session.commit()
+                recalculate_bond_percents(session)
+                session.close()
+                
+                keyboard = [
+                    [InlineKeyboardButton("💼 До портфеля", callback_data='ovdp_portfolio')],
+                    [InlineKeyboardButton("🔙 До ОВДП", callback_data='ovdp')]
+                ]
+                await update.message.reply_text(
+                    f"✅ *Залишок оновлено!*\n\n"
+                    f"🏦 Платформа: {platform}\n"
+                    f"💵 Залишок: {amount:.2f} грн",
+                    reply_markup=InlineKeyboardMarkup(keyboard),
+                    parse_mode='Markdown'
+                )
+                
+                context.user_data.pop('bond_step', None)
+                context.user_data.pop('ovdp_balance_platform', None)
+                
+            except ValueError:
+                await update.message.reply_text("❌ Будь ласка, введіть коректне число")
     
     except Exception as e:
         logger.error(f"Error in handle_message_ovdp: {e}")
@@ -779,6 +883,7 @@ async def save_bond_sell(update: Update, context: CallbackContext):
                 portfolio.last_update = datetime.now().isoformat()
         
         session.commit()
+        recalculate_bond_percents(session)
         session.close()
         
         pnl_emoji = "📈" if pnl >= 0 else "📉"
@@ -882,6 +987,7 @@ async def save_bond(update: Update, context: CallbackContext):
                     portfolio.last_update = datetime.now().isoformat()
         
         session.commit()
+        recalculate_bond_percents(session)
         session.close()
         
         # Формуємо повідомлення
@@ -1033,10 +1139,15 @@ async def show_bonds_portfolio(update: Update, context: CallbackContext, platfor
         total_invested = 0
         total_quantity = 0
         
+        # Відокремлюємо облігації від залишків
+        bond_records = [r for r in portfolio_records if not r.bond_number.endswith('uah')]
+        balance_records = [r for r in portfolio_records if r.bond_number.endswith('uah')]
+        
         if platform:
             # Фільтр по платформі — показуємо як є
-            for record in portfolio_records:
-                text += f"🔢 *{record.bond_number}*\n"
+            for record in bond_records:
+                pct = record.percent or 0
+                text += f"🔢 *{record.bond_number}* ({pct:.1f}%)\n"
                 text += f"   📆 Термін: {record.maturity_date}\n"
                 text += f"   📦 Кількість: {record.total_quantity} шт\n"
                 text += f"   💰 Середня ціна: {record.avg_price:.2f} грн\n"
@@ -1046,22 +1157,31 @@ async def show_bonds_portfolio(update: Update, context: CallbackContext, platfor
         else:
             # Загальний портфель — групуємо по bond_number
             from collections import defaultdict
-            grouped = defaultdict(lambda: {'quantity': 0, 'amount': 0, 'maturity_date': ''})
+            grouped = defaultdict(lambda: {'quantity': 0, 'amount': 0, 'maturity_date': '', 'percent': 0})
             
-            for record in portfolio_records:
+            for record in bond_records:
                 grouped[record.bond_number]['quantity'] += record.total_quantity
                 grouped[record.bond_number]['amount'] += record.total_amount
                 grouped[record.bond_number]['maturity_date'] = record.maturity_date
+                grouped[record.bond_number]['percent'] += (record.percent or 0)
             
             for bond_num, data in sorted(grouped.items()):
                 avg_price = data['amount'] / data['quantity'] if data['quantity'] > 0 else 0
-                text += f"🔢 *{bond_num}*\n"
+                text += f"🔢 *{bond_num}* ({data['percent']:.1f}%)\n"
                 text += f"   📆 Термін: {data['maturity_date']}\n"
                 text += f"   📦 Кількість: {data['quantity']} шт\n"
                 text += f"   💰 Середня ціна: {avg_price:.2f} грн\n"
                 text += f"   💵 Сума: {data['amount']:.2f} грн\n\n"
                 total_invested += data['amount']
                 total_quantity += data['quantity']
+        
+        if balance_records:
+            text += f"💵 *Залишки на рахунках:*\n"
+            for br in balance_records:
+                pct = br.percent or 0
+                text += f"   {br.bond_number}: {br.total_amount:.2f} грн ({pct:.1f}%)\n"
+                total_invested += br.total_amount
+            text += "\n"
         
         text += f"━━━━━━━━━━━━━━━━━━━━\n"
         text += f"📊 *Всього інвестовано:* {total_invested:.2f} грн\n"
@@ -1072,6 +1192,7 @@ async def show_bonds_portfolio(update: Update, context: CallbackContext, platfor
                 [InlineKeyboardButton("🏦 Всі", callback_data='ovdp_portfolio'),
                  InlineKeyboardButton("🏦 ICU", callback_data='portfolio_icu'),
                  InlineKeyboardButton("🏦 SENSBANK", callback_data='portfolio_sensbank')],
+                [InlineKeyboardButton("💵 Оновити залишок", callback_data='ovdp_update_balance')],
                 [InlineKeyboardButton("🔙 Назад", callback_data='ovdp')]
             ]
         else:
@@ -1079,6 +1200,7 @@ async def show_bonds_portfolio(update: Update, context: CallbackContext, platfor
                 [InlineKeyboardButton("💹 Взнати PnL", callback_data='pnl_portfolio')],
                 [InlineKeyboardButton("🏦 ICU", callback_data='portfolio_icu'),
                  InlineKeyboardButton("🏦 SENSBANK", callback_data='portfolio_sensbank')],
+                [InlineKeyboardButton("💵 Оновити залишок", callback_data='ovdp_update_balance')],
                 [InlineKeyboardButton("🔙 Назад", callback_data='ovdp')]
             ]
         try:

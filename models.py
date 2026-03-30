@@ -42,6 +42,7 @@ class BondPortfolio(Base):
     total_amount = Column(Float)  # Загальна сума інвестицій
     avg_price = Column(Float)  # Середня ціна за облігацію
     platform = Column(String(100))  # Платформа
+    percent = Column(Float, default=0)  # % від загальної суми портфеля
     last_update = Column(String(50), default=datetime.now().isoformat())  # Коли оновлено
 
 
