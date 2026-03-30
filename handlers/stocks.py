@@ -131,6 +131,36 @@ async def button_handler_stocks(update: Update, context: CallbackContext):
         await show_stocks_portfolio(update, context, platform='IB')
     elif query.data == 'portfolio_all':
         await show_stocks_portfolio(update, context, platform=None)
+    elif query.data == 'update_balance':
+        text = "💵 *Оновити залишок*\n\nОберіть біржу:"
+        keyboard = [
+            [InlineKeyboardButton("📊 FF", callback_data='balance_platform_ff')],
+            [InlineKeyboardButton("📊 IB", callback_data='balance_platform_ib')],
+            [InlineKeyboardButton("🔙 Назад", callback_data='stocks_portfolio')]
+        ]
+        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+    elif query.data.startswith('balance_platform_'):
+        platform = query.data.replace('balance_platform_', '').upper()
+        context.user_data['balance_platform'] = platform
+        context.user_data['stock_step'] = 'balance_amount'
+        ticker = f"{platform}usd"
+        
+        # Показуємо поточний залишок
+        Session = context.bot_data.get('Session')
+        if Session:
+            session = Session()
+            current = session.query(StockPortfolio).filter(StockPortfolio.ticker == ticker).first()
+            session.close()
+            current_amount = current.total_amount if current else 0
+        else:
+            current_amount = 0
+        
+        await query.edit_message_text(
+            f"💵 *Залишок {platform}*\n\n"
+            f"Поточний залишок: {current_amount:.2f} $\n\n"
+            f"Введіть нову суму залишку:",
+            parse_mode='Markdown'
+        )
 
 
 async def show_stocks_menu(update: Update, context: CallbackContext):
@@ -461,13 +491,24 @@ async def show_stocks_portfolio(update: Update, context: CallbackContext, platfo
         text = "💼 *Портфель Акцій*\n\n"
         total_invested = 0
         
-        for record in portfolio_records:
+        # Відокремлюємо акції від залишків
+        stock_records = [r for r in portfolio_records if not r.ticker.endswith('usd')]
+        balance_records = [r for r in portfolio_records if r.ticker.endswith('usd')]
+        
+        for record in stock_records:
             pct = record.percent or 0
             text += f"📈 *{record.ticker}* ({pct:.1f}%)\n"
             text += f"   📦 Кількість: {record.total_quantity} шт\n"
             text += f"   💰 Ціна: {record.avg_price:.2f} $\n"
             text += f"   💵 Сума: {record.total_amount:.2f} $\n\n"
             total_invested += record.total_amount
+        
+        if balance_records:
+            text += f"💵 *Залишки на рахунках:*\n"
+            for br in balance_records:
+                text += f"   {br.ticker}: {br.total_amount:.2f} $\n"
+                total_invested += br.total_amount
+            text += "\n"
         
         text += f"━━━━━━━━━━━━━━━━━━━━\n"
         text += f"📊 *Всього інвестовано:* {total_invested:.2f} $"
@@ -478,12 +519,14 @@ async def show_stocks_portfolio(update: Update, context: CallbackContext, platfo
             other_platform = 'IB' if platform == 'FF' else 'FF'
             keyboard = [
                 [InlineKeyboardButton("📊 Всі акції", callback_data='portfolio_all'), InlineKeyboardButton(f"📊 {other_platform}", callback_data=f'portfolio_{other_platform.lower()}')],
+                [InlineKeyboardButton("💵 Оновити залишок", callback_data='update_balance')],
                 [InlineKeyboardButton("🔙 Назад", callback_data='stocks')]
             ]
         else:
             # Якщо показуємо всі - показуємо обидві біржі
             keyboard = [
                 [InlineKeyboardButton("📊 FF", callback_data='portfolio_ff'), InlineKeyboardButton("📊 IB", callback_data='portfolio_ib')],
+                [InlineKeyboardButton("💵 Оновити залишок", callback_data='update_balance')],
                 [InlineKeyboardButton("🔙 Назад", callback_data='stocks')]
             ]
         
@@ -710,6 +753,9 @@ async def show_sell_stock_selection(update: Update, context: CallbackContext):
         session = Session()
         portfolio_records = session.query(StockPortfolio).all()
         session.close()
+        
+        # Фільтруємо — прибираємо залишки (FFusd, IBusd)
+        portfolio_records = [r for r in portfolio_records if not r.ticker.endswith('usd')]
         
         if not portfolio_records:
             keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data='stocks_add')]]
@@ -941,6 +987,65 @@ async def handle_message_stocks(update: Update, context: CallbackContext):
                     f"📊 Виберіть біржу:",
                     reply_markup=InlineKeyboardMarkup(keyboard)
                 )
+            except ValueError:
+                await update.message.reply_text("❌ Будь ласка, введіть коректне число")
+        
+        elif step == 'balance_amount':
+            try:
+                amount = float(user_message)
+                if amount < 0:
+                    await update.message.reply_text("❌ Сума має бути 0 або більше")
+                    return
+                
+                Session = context.bot_data.get('Session')
+                if not Session:
+                    await update.message.reply_text("❌ Помилка підключення до бази даних")
+                    return
+                
+                platform = context.user_data['balance_platform']
+                ticker = f"{platform}usd"
+                
+                session = Session()
+                record = session.query(StockPortfolio).filter(StockPortfolio.ticker == ticker).first()
+                
+                if record:
+                    record.total_amount = amount
+                    record.avg_price = amount
+                    record.last_update = datetime.now().isoformat()
+                else:
+                    record = StockPortfolio(
+                        ticker=ticker,
+                        total_quantity=1,
+                        total_amount=amount,
+                        avg_price=amount,
+                        platform=platform,
+                        percent=0,
+                        last_update=datetime.now().isoformat()
+                    )
+                    session.add(record)
+                
+                session.commit()
+                
+                # Перераховуємо процентовку
+                recalculate_percents(session)
+                
+                session.close()
+                
+                keyboard = [
+                    [InlineKeyboardButton("💼 До портфеля", callback_data='stocks_portfolio')],
+                    [InlineKeyboardButton("🔙 До Акцій", callback_data='stocks')]
+                ]
+                await update.message.reply_text(
+                    f"✅ *Залишок оновлено!*\n\n"
+                    f"📊 Біржа: {platform}\n"
+                    f"💵 Залишок: {amount:.2f} $",
+                    reply_markup=InlineKeyboardMarkup(keyboard),
+                    parse_mode='Markdown'
+                )
+                
+                context.user_data.pop('stock_step', None)
+                context.user_data.pop('balance_platform', None)
+                
             except ValueError:
                 await update.message.reply_text("❌ Будь ласка, введіть коректне число")
     
