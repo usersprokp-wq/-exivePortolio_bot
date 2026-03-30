@@ -1069,7 +1069,6 @@ async def show_bonds_portfolio(update: Update, context: CallbackContext, platfor
         
         if platform:
             keyboard = [
-                [InlineKeyboardButton("💹 Взнати PnL", callback_data='pnl_portfolio')],
                 [InlineKeyboardButton("🏦 Всі", callback_data='ovdp_portfolio'),
                  InlineKeyboardButton("🏦 ICU", callback_data='portfolio_icu'),
                  InlineKeyboardButton("🏦 SENSBANK", callback_data='portfolio_sensbank')],
