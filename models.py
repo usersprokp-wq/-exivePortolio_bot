@@ -36,7 +36,7 @@ class BondPortfolio(Base):
     """Модель для портфеля облігацій (зберігає активні позиції)"""
     __tablename__ = 'bond_portfolio'
     id = Column(Integer, primary_key=True)
-    bond_number = Column(String(50), unique=True)  # Унікальний номер облігації
+    bond_number = Column(String(50))  # Номер облігації
     maturity_date = Column(String(50))  # Дата погашення
     total_quantity = Column(Integer)  # Загальна кількість облігацій
     total_amount = Column(Float)  # Загальна сума інвестицій
