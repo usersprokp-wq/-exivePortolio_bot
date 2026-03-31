@@ -121,6 +121,10 @@ async def button_handler_stocks(update: Update, context: CallbackContext):
         await show_stocks_portfolio(update, context)
     elif query.data == 'stocks_stats':
         await show_stocks_stats(update, context)
+    elif query.data == 'stocks_dividends':
+        await query.edit_message_text("🚧 Дивіденди - в розробці", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data='stocks')]]), parse_mode='Markdown')
+    elif query.data == 'stocks_check_pnl':
+        await query.edit_message_text("🚧 Взнати PnL - в розробці", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data='stocks')]]), parse_mode='Markdown')
     elif query.data == 'stocks_profit':
         await show_stocks_profit(update, context)
     elif query.data == 'stocks_write_off_profit':
@@ -198,6 +202,8 @@ async def show_stocks_menu(update: Update, context: CallbackContext):
         [InlineKeyboardButton("💼 Портфель", callback_data='stocks_portfolio')],
         [InlineKeyboardButton("💰 Прибуток", callback_data='stocks_profit')],
         [InlineKeyboardButton("📊 Статистика", callback_data='stocks_stats')],
+        [InlineKeyboardButton("💵 Дивіденди", callback_data='stocks_dividends')],
+        [InlineKeyboardButton("📈 Взнати PnL", callback_data='stocks_check_pnl')],
         [InlineKeyboardButton("🔙 Назад", callback_data='back_to_menu')]
     ]
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
