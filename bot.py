@@ -67,10 +67,11 @@ async def post_init(app: Application):
 
 async def handle_message_unified(update: Update, context: CallbackContext):
     """Обробка текстових повідомлень для всіх портфелів"""
-    if 'bond_step' in context.user_data or 'profit_step' in context.user_data:
+    if 'bond_step' in context.user_data:
         await handle_message_ovdp(update, context)
-    elif 'stock_step' in context.user_data:
+    elif 'stock_step' in context.user_data or 'profit_step' in context.user_data:
         await handle_message_stocks(update, context)
+    # Залишається також обробка profit_step для ОВДП в handle_message_ovdp
 
 
 def main():

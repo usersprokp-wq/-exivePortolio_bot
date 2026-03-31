@@ -88,6 +88,18 @@ class StockPortfolio(Base):
     last_update = Column(String(50), default=datetime.now().isoformat())  # Коли оновлено
 
 
+class StockProfitRecord(Base):
+    """Таблиця для відслідкування прибутків акцій"""
+    __tablename__ = 'stock_profit_records'
+    id = Column(Integer, primary_key=True)
+    operation_date = Column(String(50))  # Дата операції купівлі/продажу
+    operation_type = Column(String(20))  # 'купівля' або 'продаж'
+    amount = Column(Float)  # Сума операції
+    realized_profit = Column(Float, default=0)  # Реалізований прибуток
+    unrealized_profit = Column(Float, default=0)  # Нереалізований прибуток (для списання)
+    created_at = Column(String(50), default=datetime.now().isoformat())
+
+
 class Deposit(Base):
     """Модель для депозитів"""
     __tablename__ = 'deposits'
