@@ -985,19 +985,73 @@ async def handle_message_stocks(update: Update, context: CallbackContext):
                 pnl = (price - avg_price) * quantity - commission
                 context.user_data['pnl'] = pnl
                 
-                context.user_data['stock_step'] = 'sell_platform'
-                keyboard = [
-                    [InlineKeyboardButton("📊 FF", callback_data='stock_platform_ff')],
-                    [InlineKeyboardButton("📊 IB", callback_data='stock_platform_ib')]
-                ]
+                # Біржа автоматично з портфеля (продаємо там де купили)
+                platform = context.user_data['sell_platform']
+                context.user_data['platform'] = platform
+                
                 pnl_emoji = "📈" if pnl >= 0 else "📉"
-                await update.message.reply_text(
-                    f"💵 Сума: {total_amount:.2f} $\n"
-                    f"💸 Комісія: {commission:.2f} $\n"
-                    f"{pnl_emoji} PnL: {pnl:+.2f} $\n\n"
-                    f"📊 Виберіть біржу:",
-                    reply_markup=InlineKeyboardMarkup(keyboard)
+                ticker = context.user_data['ticker']
+                
+                # Зберігаємо одразу без вибору біржі
+                Session = context.bot_data.get('Session')
+                if not Session:
+                    await update.message.reply_text("❌ Помилка підключення до бази даних")
+                    return
+                
+                session = Session()
+                
+                stock = Stock(
+                    date=context.user_data['stock_date'],
+                    operation_type='продаж',
+                    ticker=ticker,
+                    name=ticker,
+                    price_per_unit=price,
+                    quantity=quantity,
+                    total_amount=total_amount,
+                    platform=platform,
+                    pnl=pnl
                 )
+                session.add(stock)
+                session.commit()
+                
+                # Оновлюємо портфель
+                portfolio = session.query(StockPortfolio).filter(StockPortfolio.ticker == ticker).first()
+                if portfolio:
+                    portfolio.total_quantity -= quantity
+                    portfolio.total_amount -= (avg_price * quantity)
+                    
+                    if portfolio.total_quantity <= 0:
+                        session.delete(portfolio)
+                    else:
+                        portfolio.avg_price = portfolio.total_amount / portfolio.total_quantity if portfolio.total_quantity > 0 else 0
+                        portfolio.last_update = datetime.now().isoformat()
+                
+                session.commit()
+                recalculate_percents(session)
+                session.close()
+                
+                text = (
+                    f"✅ *Запис додано!*\n\n"
+                    f"📅 Дата: {context.user_data['stock_date']}\n"
+                    f"📊 Операція: Продаж\n"
+                    f"📈 Тікер: {ticker}\n"
+                    f"💵 Ціна за шт: {price:.3f} $\n"
+                    f"📦 Кількість: {quantity} шт\n"
+                    f"💰 Загальна сума: {total_amount:.2f} $\n"
+                    f"💸 Комісія: {commission:.2f} $\n"
+                    f"📊 Біржа: {platform}\n\n"
+                    f"{pnl_emoji} *PnL: {pnl:+.2f} $*"
+                )
+                
+                await update.message.reply_text(
+                    text,
+                    reply_markup=InlineKeyboardMarkup([
+                        [InlineKeyboardButton("🔙 Назад до Акцій", callback_data='stocks')]
+                    ]),
+                    parse_mode='Markdown'
+                )
+                context.user_data.clear()
+                
             except ValueError:
                 await update.message.reply_text("❌ Будь ласка, введіть коректне число")
         
