@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 
 async def recalculate_portfolio(Session):
-    """Пересчитати портфель з записів stocks та заповнити stock_portfolio"""
+    """Пересчитати портфель з записів stocks та заповнити stock_portfolio (FIFO)"""
     try:
         session = Session()
         
@@ -24,38 +24,58 @@ async def recalculate_portfolio(Session):
             session.close()
             return
         
-        # Розраховуємо портфель
-        portfolio = {}
+        # Сортуємо по даті (старі спочатку) для FIFO
+        def parse_date(date_str):
+            try:
+                return datetime.strptime(str(date_str).strip(), '%d.%m.%Y')
+            except:
+                return datetime.min
+        
+        stocks = sorted(stocks, key=lambda x: (parse_date(x.date), 0 if x.operation_type == 'купівля' else 1))
+        
+        # FIFO черга для кожного тікера
+        from collections import deque
+        buy_queues = {}  # ticker -> deque of {'price': ..., 'quantity': ..., 'platform': ...}
+        
         for stock in stocks:
-            if stock.ticker not in portfolio:
-                portfolio[stock.ticker] = {
-                    'total_quantity': 0,
-                    'total_amount': 0,
-                    'platform': stock.platform
-                }
+            ticker = stock.ticker
+            if ticker not in buy_queues:
+                buy_queues[ticker] = {'queue': deque(), 'platform': stock.platform}
             
             if stock.operation_type == 'купівля':
-                portfolio[stock.ticker]['total_quantity'] += stock.quantity
-                portfolio[stock.ticker]['total_amount'] += stock.total_amount
-            else:  # продаж
-                portfolio[stock.ticker]['total_quantity'] -= stock.quantity
-                portfolio[stock.ticker]['total_amount'] -= stock.total_amount
+                price_per_unit = stock.total_amount / stock.quantity if stock.quantity > 0 else 0
+                buy_queues[ticker]['queue'].append({
+                    'price': price_per_unit,
+                    'quantity': stock.quantity
+                })
+                buy_queues[ticker]['platform'] = stock.platform
+            
+            else:  # продаж — списуємо по FIFO
+                remaining = stock.quantity
+                while remaining > 0 and buy_queues[ticker]['queue']:
+                    buy = buy_queues[ticker]['queue'][0]
+                    qty_to_sell = min(remaining, buy['quantity'])
+                    buy['quantity'] -= qty_to_sell
+                    remaining -= qty_to_sell
+                    if buy['quantity'] == 0:
+                        buy_queues[ticker]['queue'].popleft()
         
-        # Залишаємо тільки активні позиції
-        portfolio = {k: v for k, v in portfolio.items() if v['total_quantity'] > 0}
-        
-        # Зберігаємо в stock_portfolio
-        for ticker, data in portfolio.items():
-            avg_price = data['total_amount'] / data['total_quantity'] if data['total_quantity'] > 0 else 0
-            portfolio_record = StockPortfolio(
-                ticker=ticker,
-                total_quantity=data['total_quantity'],
-                total_amount=data['total_amount'],
-                avg_price=avg_price,
-                platform=data['platform'],
-                last_update=datetime.now().isoformat()
-            )
-            session.add(portfolio_record)
+        # Формуємо портфель з залишків в чергах
+        for ticker, data in buy_queues.items():
+            total_quantity = sum(b['quantity'] for b in data['queue'])
+            total_amount = sum(b['price'] * b['quantity'] for b in data['queue'])
+            
+            if total_quantity > 0:
+                avg_price = total_amount / total_quantity
+                portfolio_record = StockPortfolio(
+                    ticker=ticker,
+                    total_quantity=total_quantity,
+                    total_amount=total_amount,
+                    avg_price=avg_price,
+                    platform=data['platform'],
+                    last_update=datetime.now().isoformat()
+                )
+                session.add(portfolio_record)
         
         session.commit()
         
@@ -63,7 +83,7 @@ async def recalculate_portfolio(Session):
         recalculate_percents(session)
         
         session.close()
-        logger.info(f"Портфель пересчитаний: {len(portfolio)} активних позицій")
+        logger.info(f"Портфель пересчитаний (FIFO)")
         
     except Exception as e:
         logger.error(f"Error recalculating portfolio: {e}")
