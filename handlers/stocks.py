@@ -746,49 +746,134 @@ async def sync_stocks_from_sheets(update: Update, context: CallbackContext):
         text += "⏳ Пересчитую портфель..."
         await query.edit_message_text(text, parse_mode='Markdown')
         
-        await recalculate_portfolio(Session)
+        session = Session()
         
-        # Підтягуємо залишки (FFusd, IBusd) з аркуша Акції-Портфель
-        try:
-            balances = sheets_manager.import_stocks_balances_from_sheets()
-            session = Session()
-            for bal in balances:
-                existing = session.query(StockPortfolio).filter(StockPortfolio.ticker == bal['ticker']).first()
-                if not existing:
-                    record = StockPortfolio(
-                        ticker=bal['ticker'],
-                        total_quantity=bal['total_quantity'],
-                        total_amount=bal['total_amount'],
-                        avg_price=bal['avg_price'],
-                        platform=bal['platform'],
-                        percent=0,
-                        last_update=datetime.now().isoformat()
-                    )
-                    session.add(record)
-            
-            # Якщо залишків не було в Excel — додаємо з 0
-            for default_bal in [('FFusd', 'FF'), ('IBusd', 'IB')]:
-                ticker, platform = default_bal
-                exists = session.query(StockPortfolio).filter(StockPortfolio.ticker == ticker).first()
-                if not exists:
-                    record = StockPortfolio(
-                        ticker=ticker,
-                        total_quantity=1,
-                        total_amount=0,
-                        avg_price=0,
-                        platform=platform,
-                        percent=0,
-                        last_update=datetime.now().isoformat()
-                    )
-                    session.add(record)
-            
-            session.commit()
-            recalculate_percents(session)
-            session.close()
-        except Exception as e:
-            logger.error(f"Error restoring balances: {e}")
+        # 1. Рахуємо залишки по записах (тікер + платформа → кількість)
+        all_stocks = session.query(Stock).all()
+        from collections import defaultdict
+        calculated_remains = defaultdict(lambda: {'quantity': 0})
         
-        text += "\n✅ Портфель оновлено!"
+        for stock in all_stocks:
+            key = (stock.ticker, stock.platform.upper() if stock.platform else '')
+            if stock.operation_type == 'купівля':
+                calculated_remains[key]['quantity'] += stock.quantity
+            else:
+                calculated_remains[key]['quantity'] -= stock.quantity
+        
+        # Тільки активні позиції
+        calculated_remains = {k: v for k, v in calculated_remains.items() if v['quantity'] > 0}
+        
+        # 2. Імпортуємо портфель з Excel
+        excel_portfolio = sheets_manager.import_stocks_portfolio_from_sheets()
+        
+        # Формуємо словник Excel-портфеля по ключу (тікер, платформа)
+        excel_dict = {}
+        for item in excel_portfolio:
+            key = (item['ticker'], item.get('platform', '').upper())
+            excel_dict[key] = item
+        
+        # 3. Очищаємо таблицю портфеля
+        session.query(StockPortfolio).delete()
+        session.commit()
+        
+        matched = 0
+        recalculated = 0
+        
+        # 4. Порівнюємо і заповнюємо портфель
+        for (ticker, platform), calc_data in calculated_remains.items():
+            key = (ticker, platform)
+            excel_item = excel_dict.get(key)
+            
+            if excel_item and excel_item['total_quantity'] == calc_data['quantity']:
+                # Збігається → беремо з Excel
+                record = StockPortfolio(
+                    ticker=ticker,
+                    total_quantity=excel_item['total_quantity'],
+                    total_amount=excel_item['total_amount'],
+                    avg_price=excel_item['avg_price'],
+                    platform=platform,
+                    percent=0,
+                    last_update=datetime.now().isoformat()
+                )
+                matched += 1
+            else:
+                # Не збігається → точковий перерахунок по середньозваженій
+                total_qty = 0
+                total_amt = 0
+                
+                stock_records = [s for s in all_stocks 
+                                if s.ticker == ticker 
+                                and (s.platform.upper() if s.platform else '') == platform]
+                
+                def parse_date(date_str):
+                    try:
+                        return datetime.strptime(str(date_str).strip(), '%d.%m.%Y')
+                    except:
+                        return datetime.min
+                
+                stock_records.sort(key=lambda x: (parse_date(x.date), 0 if x.operation_type == 'купівля' else 1))
+                
+                for s in stock_records:
+                    if s.operation_type == 'купівля':
+                        total_qty += s.quantity
+                        total_amt += s.total_amount
+                    else:
+                        if total_qty > 0:
+                            avg = total_amt / total_qty
+                            total_amt -= avg * s.quantity
+                            total_qty -= s.quantity
+                
+                avg_price = total_amt / total_qty if total_qty > 0 else 0
+                
+                record = StockPortfolio(
+                    ticker=ticker,
+                    total_quantity=total_qty,
+                    total_amount=total_amt,
+                    avg_price=avg_price,
+                    platform=platform,
+                    percent=0,
+                    last_update=datetime.now().isoformat()
+                )
+                recalculated += 1
+            
+            session.add(record)
+        
+        # 5. Додаємо залишки (FFusd, IBusd) з Excel
+        for item in excel_portfolio:
+            if item['ticker'].endswith('usd'):
+                record = StockPortfolio(
+                    ticker=item['ticker'],
+                    total_quantity=item.get('total_quantity', 1),
+                    total_amount=item.get('total_amount', 0),
+                    avg_price=item.get('avg_price', 0),
+                    platform=item.get('platform', ''),
+                    percent=0,
+                    last_update=datetime.now().isoformat()
+                )
+                session.add(record)
+        
+        # Якщо залишків не було в Excel — додаємо з 0
+        for default_bal in [('FFusd', 'FF'), ('IBusd', 'IB')]:
+            ticker_bal, plat = default_bal
+            exists = session.query(StockPortfolio).filter(StockPortfolio.ticker == ticker_bal).first()
+            if not exists:
+                record = StockPortfolio(
+                    ticker=ticker_bal,
+                    total_quantity=1,
+                    total_amount=0,
+                    avg_price=0,
+                    platform=plat,
+                    percent=0,
+                    last_update=datetime.now().isoformat()
+                )
+                session.add(record)
+        
+        session.commit()
+        recalculate_percents(session)
+        session.close()
+        
+        text += f"\n✅ Портфель оновлено!"
+        text += f"\n📋 З Excel: {matched} | Перераховано: {recalculated}"
         
         keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data='stocks')]]
         await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')

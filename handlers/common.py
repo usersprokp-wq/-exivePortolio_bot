@@ -235,7 +235,8 @@ async def sync_bonds_to_sheets(update: Update, context: CallbackContext):
                 'maturity_date': record.maturity_date,
                 'total_quantity': record.total_quantity,
                 'avg_price': record.avg_price,
-                'total_amount': record.total_amount
+                'total_amount': record.total_amount,
+                'platform': record.platform or ''
             })
         
         sheets_manager.export_bonds_portfolio(portfolio_data)
