@@ -576,6 +576,15 @@ async def sync_stocks_to_sheets(update: Update, context: CallbackContext):
             await query.edit_message_text("📭 Немає даних для синхронізації")
             return
         
+        # Сортуємо по даті: старі зверху, нові знизу
+        def parse_date(date_str):
+            try:
+                return datetime.strptime(str(date_str).strip(), '%d.%m.%Y')
+            except:
+                return datetime.min
+        
+        stocks = sorted(stocks, key=lambda x: parse_date(x.date), reverse=False)
+        
         # Готуємо дані записів
         stocks_data = []
         for stock in stocks:
