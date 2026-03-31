@@ -918,7 +918,7 @@ async def show_stocks_profit(update: Update, context: CallbackContext):
             await query.edit_message_text("📭 Немає даних про акції")
             return
         
-        # Реалізований прибуток — сума pnl з усіх продажів
+        # Реалізований прибуток — сума pnl з операцій продажу
         total_profit = sum(s.pnl or 0 for s in stocks if s.operation_type == 'продаж')
         
         # Отримуємо списаний прибуток
@@ -967,7 +967,7 @@ async def write_off_stocks_profit_menu(update: Update, context: CallbackContext)
             await query.edit_message_text("📭 Немає даних про акції")
             return
         
-        # Реалізований прибуток — сума pnl з усіх продажів
+        # Реалізований прибуток — сума pnl з операцій продажу
         total_profit = sum(s.pnl or 0 for s in stocks if s.operation_type == 'продаж')
         
         profit_records = session.query(StockProfitRecord).filter(StockProfitRecord.unrealized_profit > 0).all()
