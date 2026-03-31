@@ -54,8 +54,8 @@ class GoogleSheetsManager:
             
             headers = ['Дата', 'Тип операції', 'Номер ОВДП', 'Термін до', 
                       'Ціна за шт', 'Кількість', 'Сума', 'Платформа', 'PnL']
-            worksheet.append_row(headers)
             
+            all_rows = [headers]
             for bond in bonds_data:
                 row = [
                     bond.get('date', ''),
@@ -68,7 +68,9 @@ class GoogleSheetsManager:
                     bond.get('platform', ''),
                     bond.get('pnl', 0)
                 ]
-                worksheet.append_row(row)
+                all_rows.append(row)
+            
+            worksheet.update(range_name=f'A1:{chr(64 + len(headers))}{len(all_rows)}', values=all_rows)
             
             logger.info(f"Exported {len(bonds_data)} bonds to worksheet 'ОВДП-Записи'")
             return True
@@ -86,8 +88,8 @@ class GoogleSheetsManager:
                 return
             
             headers = ['Номер ОВДП', 'Термін до', 'Кількість', 'Середня ціна', 'Сума']
-            worksheet.append_row(headers)
             
+            all_rows = [headers]
             for item in portfolio_data:
                 row = [
                     item.get('bond_number', ''),
@@ -96,7 +98,9 @@ class GoogleSheetsManager:
                     item.get('avg_price', 0),
                     item.get('total_amount', 0)
                 ]
-                worksheet.append_row(row)
+                all_rows.append(row)
+            
+            worksheet.update(range_name=f'A1:{chr(64 + len(headers))}{len(all_rows)}', values=all_rows)
             
             logger.info(f"Exported portfolio to worksheet 'ОВДП-Портфель'")
             return True
@@ -115,8 +119,8 @@ class GoogleSheetsManager:
             
             headers = ['Дата операції', 'Тип операції', 'Сума операції', 
                       'Реалізований прибуток', 'Нереалізований прибуток']
-            worksheet.append_row(headers)
             
+            all_rows = [headers]
             for record in profit_data:
                 row = [
                     record.get('operation_date', ''),
@@ -125,7 +129,9 @@ class GoogleSheetsManager:
                     record.get('realized_profit', ''),
                     record.get('unrealized_profit', '')
                 ]
-                worksheet.append_row(row)
+                all_rows.append(row)
+            
+            worksheet.update(range_name=f'A1:{chr(64 + len(headers))}{len(all_rows)}', values=all_rows)
             
             logger.info(f"Exported profit data to worksheet 'ОВДП-Прибуток'")
             return True
@@ -190,8 +196,8 @@ class GoogleSheetsManager:
                 return
             
             headers = ['Дата', 'Платформа', 'Тип операції', 'Тікер', 'Ціна за шт', 'Кількість', 'Сума', 'P&L']
-            worksheet.append_row(headers)
             
+            all_rows = [headers]
             for stock in stocks_data:
                 row = [
                     stock.get('date', ''),
@@ -203,7 +209,9 @@ class GoogleSheetsManager:
                     stock.get('total_amount', ''),
                     stock.get('pnl', '')
                 ]
-                worksheet.append_row(row)
+                all_rows.append(row)
+            
+            worksheet.update(range_name=f'A1:{chr(64 + len(headers))}{len(all_rows)}', values=all_rows)
             
             logger.info(f"Exported {len(stocks_data)} stocks to worksheet 'Акції-Записи'")
             return True
@@ -221,8 +229,8 @@ class GoogleSheetsManager:
                 return
             
             headers = ['Тікер', 'Кількість', 'Ціна за шт', 'Сума', 'Біржа', '%']
-            worksheet.append_row(headers)
             
+            all_rows = [headers]
             for item in portfolio_data:
                 row = [
                     item.get('ticker', ''),
@@ -232,7 +240,9 @@ class GoogleSheetsManager:
                     item.get('platform', ''),
                     item.get('percent', 0)
                 ]
-                worksheet.append_row(row)
+                all_rows.append(row)
+            
+            worksheet.update(range_name=f'A1:{chr(64 + len(headers))}{len(all_rows)}', values=all_rows)
             
             logger.info(f"Exported portfolio to worksheet 'Акції-Портфель'")
             return True
