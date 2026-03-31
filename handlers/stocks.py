@@ -728,6 +728,46 @@ async def sync_stocks_from_sheets(update: Update, context: CallbackContext):
         
         await recalculate_portfolio(Session)
         
+        # Підтягуємо залишки (FFusd, IBusd) з аркуша Акції-Портфель
+        try:
+            balances = sheets_manager.import_stocks_balances_from_sheets()
+            session = Session()
+            for bal in balances:
+                existing = session.query(StockPortfolio).filter(StockPortfolio.ticker == bal['ticker']).first()
+                if not existing:
+                    record = StockPortfolio(
+                        ticker=bal['ticker'],
+                        total_quantity=bal['total_quantity'],
+                        total_amount=bal['total_amount'],
+                        avg_price=bal['avg_price'],
+                        platform=bal['platform'],
+                        percent=0,
+                        last_update=datetime.now().isoformat()
+                    )
+                    session.add(record)
+            
+            # Якщо залишків не було в Excel — додаємо з 0
+            for default_bal in [('FFusd', 'FF'), ('IBusd', 'IB')]:
+                ticker, platform = default_bal
+                exists = session.query(StockPortfolio).filter(StockPortfolio.ticker == ticker).first()
+                if not exists:
+                    record = StockPortfolio(
+                        ticker=ticker,
+                        total_quantity=1,
+                        total_amount=0,
+                        avg_price=0,
+                        platform=platform,
+                        percent=0,
+                        last_update=datetime.now().isoformat()
+                    )
+                    session.add(record)
+            
+            session.commit()
+            recalculate_percents(session)
+            session.close()
+        except Exception as e:
+            logger.error(f"Error restoring balances: {e}")
+        
         text += "\n✅ Портфель оновлено!"
         
         keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data='stocks')]]

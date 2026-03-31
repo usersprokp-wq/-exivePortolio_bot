@@ -290,3 +290,68 @@ class GoogleSheetsManager:
         except Exception as e:
             logger.error(f"Error importing stocks from sheets: {e}")
             raise
+    
+    def import_bonds_balances_from_sheets(self):
+        """Імпортує залишки (ICUuah, SENSBANKuah) з аркуша ОВДП-Портфель"""
+        try:
+            worksheet = self.get_or_create_worksheet("ОВДП-Портфель")
+            all_rows = worksheet.get_all_values()
+            
+            if not all_rows or len(all_rows) < 2:
+                return []
+            
+            balances = []
+            for row in all_rows[1:]:
+                if not any(row):
+                    continue
+                bond_number = row[0] if len(row) > 0 else ''
+                if bond_number.endswith('uah'):
+                    try:
+                        balances.append({
+                            'bond_number': bond_number,
+                            'maturity_date': row[1] if len(row) > 1 else '',
+                            'total_quantity': int(row[2]) if len(row) > 2 and row[2] else 1,
+                            'avg_price': float(str(row[3]).replace(',', '.')) if len(row) > 3 and row[3] else 0,
+                            'total_amount': float(str(row[4]).replace(',', '.')) if len(row) > 4 and row[4] else 0
+                        })
+                    except (ValueError, IndexError) as e:
+                        logger.warning(f"Error parsing balance row: {e}, row={row}")
+            
+            logger.info(f"Imported {len(balances)} bond balances from 'ОВДП-Портфель'")
+            return balances
+        except Exception as e:
+            logger.error(f"Error importing bond balances: {e}")
+            return []
+    
+    def import_stocks_balances_from_sheets(self):
+        """Імпортує залишки (FFusd, IBusd) з аркуша Акції-Портфель"""
+        try:
+            worksheet = self.get_or_create_worksheet("Акції-Портфель")
+            all_rows = worksheet.get_all_values()
+            
+            if not all_rows or len(all_rows) < 2:
+                return []
+            
+            balances = []
+            for row in all_rows[1:]:
+                if not any(row):
+                    continue
+                ticker = row[0] if len(row) > 0 else ''
+                if ticker.endswith('usd'):
+                    try:
+                        balances.append({
+                            'ticker': ticker,
+                            'total_quantity': int(row[1]) if len(row) > 1 and row[1] else 1,
+                            'avg_price': float(str(row[2]).replace(',', '.')) if len(row) > 2 and row[2] else 0,
+                            'total_amount': float(str(row[3]).replace(',', '.')) if len(row) > 3 and row[3] else 0,
+                            'platform': row[4] if len(row) > 4 else '',
+                            'percent': float(str(row[5]).replace(',', '.')) if len(row) > 5 and row[5] else 0
+                        })
+                    except (ValueError, IndexError) as e:
+                        logger.warning(f"Error parsing balance row: {e}, row={row}")
+            
+            logger.info(f"Imported {len(balances)} stock balances from 'Акції-Портфель'")
+            return balances
+        except Exception as e:
+            logger.error(f"Error importing stock balances: {e}")
+            return []

@@ -1528,6 +1528,46 @@ async def sync_bonds_from_sheets(update: Update, context: CallbackContext):
         
         await recalculate_bond_portfolio(Session)
         
+        # Підтягуємо залишки (ICUuah, SENSBANKuah) з аркуша ОВДП-Портфель
+        try:
+            balances = sheets_manager.import_bonds_balances_from_sheets()
+            session = Session()
+            for bal in balances:
+                existing = session.query(BondPortfolio).filter(BondPortfolio.bond_number == bal['bond_number']).first()
+                if not existing:
+                    record = BondPortfolio(
+                        bond_number=bal['bond_number'],
+                        maturity_date=bal.get('maturity_date', ''),
+                        total_quantity=bal.get('total_quantity', 1),
+                        total_amount=bal.get('total_amount', 0),
+                        avg_price=bal.get('avg_price', 0),
+                        platform=bal['bond_number'].replace('uah', '').upper(),
+                        last_update=datetime.now().isoformat()
+                    )
+                    session.add(record)
+            
+            # Якщо залишків не було в Excel — додаємо з 0
+            for default_bal in [('ICUuah', 'ICU'), ('SENSBANKuah', 'SENSBANK')]:
+                bond_number, platform = default_bal
+                exists = session.query(BondPortfolio).filter(BondPortfolio.bond_number == bond_number).first()
+                if not exists:
+                    record = BondPortfolio(
+                        bond_number=bond_number,
+                        maturity_date='',
+                        total_quantity=1,
+                        total_amount=0,
+                        avg_price=0,
+                        platform=platform,
+                        last_update=datetime.now().isoformat()
+                    )
+                    session.add(record)
+            
+            session.commit()
+            recalculate_bond_percents(session)
+            session.close()
+        except Exception as e:
+            logger.error(f"Error restoring bond balances: {e}")
+        
         text += "\n✅ Портфель оновлено!"
         
         keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data='sync')]]
