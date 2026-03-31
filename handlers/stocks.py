@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import CallbackContext
 
-from models import Stock, StockPortfolio
+from models import Stock, StockPortfolio, StockProfitRecord
 
 logger = logging.getLogger(__name__)
 
@@ -123,6 +123,11 @@ async def button_handler_stocks(update: Update, context: CallbackContext):
         await show_stocks_stats(update, context)
     elif query.data == 'stocks_profit':
         await show_stocks_profit(update, context)
+    elif query.data == 'stocks_write_off_profit':
+        await write_off_stocks_profit_menu(update, context)
+    elif query.data == 'stocks_confirm_write_off':
+        context.user_data['profit_step'] = 'enter_amount'
+        await query.edit_message_text("💰 Введіть суму для списання:", parse_mode='Markdown')
     elif query.data == 'stocks_sync':
         await sync_stocks_to_sheets(update, context)
     elif query.data == 'stocks_sync_from_sheets':
@@ -895,13 +900,104 @@ async def show_stocks_stats(update: Update, context: CallbackContext):
 
 
 async def show_stocks_profit(update: Update, context: CallbackContext):
-    """Показати прибуток від акцій"""
+    """Меню управління прибутками акцій"""
     query = update.callback_query
     await query.answer()
     
     try:
-        await query.edit_message_text("🚧 Прибуток акцій - в розробці", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data='stocks')]]), parse_mode='Markdown')
+        Session = context.bot_data.get('Session')
+        if not Session:
+            await query.edit_message_text("❌ Помилка підключення до бази даних")
+            return
+        
+        session = Session()
+        stocks = session.query(Stock).all()
+        
+        if not stocks:
+            session.close()
+            await query.edit_message_text("📭 Немає даних про акції")
+            return
+        
+        # Реалізований прибуток — сума pnl з усіх продажів
+        total_profit = sum(s.pnl or 0 for s in stocks if s.operation_type == 'продаж')
+        
+        # Отримуємо списаний прибуток
+        profit_records = session.query(StockProfitRecord).filter(StockProfitRecord.unrealized_profit > 0).all()
+        session.close()
+        
+        total_written_off = sum(r.unrealized_profit for r in profit_records)
+        
+        unrealized_profit = total_profit - total_written_off
+        if unrealized_profit < 0:
+            unrealized_profit = 0
+        
+        text = f"💰 *Управління прибутками акцій*\n\n"
+        text += f"📈 Реалізований прибуток: {total_profit:.2f} $\n"
+        text += f"📋 Не списаний прибуток: {unrealized_profit:.2f} $\n\n"
+        
+        keyboard = [
+            [InlineKeyboardButton("✍️ Списати прибуток", callback_data='stocks_write_off_profit')],
+            [InlineKeyboardButton("🔙 Назад", callback_data='stocks')]
+        ]
+        
+        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+        
     except Exception as e:
+        await query.edit_message_text(f"❌ Помилка: {str(e)}")
+
+
+async def write_off_stocks_profit_menu(update: Update, context: CallbackContext):
+    """Меню списання прибутку акцій"""
+    query = update.callback_query
+    await query.answer()
+    
+    logger.info("write_off_stocks_profit_menu called")
+    
+    try:
+        Session = context.bot_data.get('Session')
+        if not Session:
+            await query.edit_message_text("❌ Помилка підключення до бази даних")
+            return
+        
+        session = Session()
+        stocks = session.query(Stock).all()
+        
+        if not stocks:
+            session.close()
+            await query.edit_message_text("📭 Немає даних про акції")
+            return
+        
+        # Реалізований прибуток — сума pnl з усіх продажів
+        total_profit = sum(s.pnl or 0 for s in stocks if s.operation_type == 'продаж')
+        
+        profit_records = session.query(StockProfitRecord).filter(StockProfitRecord.unrealized_profit > 0).all()
+        session.close()
+        
+        total_written_off = sum(r.unrealized_profit for r in profit_records)
+        
+        unrealized_profit = total_profit - total_written_off
+        if unrealized_profit < 0:
+            unrealized_profit = 0
+        
+        context.user_data['unrealized_profit'] = unrealized_profit
+        
+        text = f"💰 *Списання прибутку акцій*\n\n"
+        text += f"📋 Не списаний прибуток: *{unrealized_profit:.2f} $*\n\n"
+        
+        if unrealized_profit > 0:
+            keyboard = [
+                [InlineKeyboardButton("✍️ Списати", callback_data='stocks_confirm_write_off')],
+                [InlineKeyboardButton("🔙 Назад", callback_data='stocks_profit')]
+            ]
+        else:
+            keyboard = [
+                [InlineKeyboardButton("🔙 Назад", callback_data='stocks_profit')]
+            ]
+        
+        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+        
+    except Exception as e:
+        logger.error(f"Error in write_off_stocks_profit_menu: {e}")
         await query.edit_message_text(f"❌ Помилка: {str(e)}")
 
 
@@ -1208,6 +1304,59 @@ async def handle_message_stocks(update: Update, context: CallbackContext):
                 
             except ValueError:
                 await update.message.reply_text("❌ Будь ласка, введіть коректне число")
+        
+        elif 'profit_step' in context.user_data and context.user_data.get('profit_step') == 'enter_amount':
+            try:
+                write_off_amount = float(user_message)
+                unrealized_profit = context.user_data.get('unrealized_profit', 0)
+                
+                if write_off_amount > unrealized_profit:
+                    await update.message.reply_text(
+                        f"❌ Сума перевищує не списаний прибуток ({unrealized_profit:.2f} $)\n\n"
+                        f"💰 Введіть суму для списання:"
+                    )
+                    return
+                
+                if write_off_amount <= 0:
+                    await update.message.reply_text("❌ Сума має бути більше 0\n\n💰 Введіть суму для списання:")
+                    return
+                
+                Session = context.bot_data.get('Session')
+                if not Session:
+                    await update.message.reply_text("❌ Помилка підключення до бази даних")
+                    return
+                
+                session = Session()
+                
+                from models import StockProfitRecord
+                profit_record = StockProfitRecord(
+                    operation_date=datetime.now().strftime('%d.%m.%Y'),
+                    operation_type='списання',
+                    amount=write_off_amount,
+                    realized_profit=0,
+                    unrealized_profit=write_off_amount
+                )
+                session.add(profit_record)
+                session.commit()
+                session.close()
+                
+                remaining_profit = unrealized_profit - write_off_amount
+                text = f"✅ *Прибуток списано!*\n\n"
+                text += f"📝 Списано: {write_off_amount:.2f} $\n"
+                text += f"📋 Залишилось: {remaining_profit:.2f} $\n"
+                
+                keyboard = [
+                    [InlineKeyboardButton("💰 До меню прибутків", callback_data='stocks_profit')],
+                    [InlineKeyboardButton("📊 До Акцій", callback_data='stocks')]
+                ]
+                await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+                
+                # Очищуємо дані про прибуток
+                context.user_data.pop('profit_step', None)
+                context.user_data.pop('unrealized_profit', None)
+                
+            except ValueError:
+                await update.message.reply_text("❌ Будь ласка, введіть коректне число\n\n💰 Введіть суму для списання:")
         
         elif step == 'balance_amount':
             try:
