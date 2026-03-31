@@ -504,6 +504,7 @@ async def show_stocks_portfolio(update: Update, context: CallbackContext, platfo
         stock_records = [r for r in portfolio_records if not r.ticker.endswith('usd')]
         balance_records = [r for r in portfolio_records if r.ticker.endswith('usd')]
         
+        stock_records.sort(key=lambda r: r.total_amount, reverse=True)
         for record in stock_records:
             pct = record.percent or 0
             text += f"📈 *{record.ticker}* ({pct:.1f}%)\n"
