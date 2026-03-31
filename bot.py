@@ -96,7 +96,7 @@ def main():
     app.add_handler(CallbackQueryHandler(button_handler_ovdp, pattern=r'^(ovdp|bond_|sell_bond_|date_|cal_|platform_|portfolio_icu|portfolio_sensbank|write_off|confirm_write_off|pnl_portfolio|bonds_list_page_|sync_sheets_to_db)'))
     
     # Акції обробники (перед спільними, бо більш специфічні)
-    app.add_handler(CallbackQueryHandler(button_handler_stocks, pattern=r'^(stocks|stocks_add|stocks_list|stocks_list_page_|stocks_date_|stocks_portfolio|stocks_stats|stocks_profit|stocks_sync|stocks_sync_from_sheets|stocks_cal_|stock_buy|stock_sell|sell_stock_|stock_platform_|portfolio_|update_balance|balance_platform_)'))
+    app.add_handler(CallbackQueryHandler(button_handler_stocks, pattern=r'^(stocks|stocks_add|stocks_list|stocks_list_page_|stocks_date_|stocks_portfolio|stocks_stats|stocks_profit|stocks_write_off_profit|stocks_confirm_write_off|stocks_sync|stocks_sync_from_sheets|stocks_cal_|stock_buy|stock_sell|sell_stock_|stock_platform_|portfolio_|update_balance|balance_platform_)'))
     
     # Головне меню та спільні функції (загальні кнопки + синхронізація)
     app.add_handler(CallbackQueryHandler(button_handler_main, pattern=r'^(back_to_menu|analysis|sync|sync_ovdp|sync_stocks|sync_deposit|sync_crypto|sync_numismatics|sync_ovdp_db_to_sheets|sync_ovdp_sheets_to_db|sync_stocks_db_to_sheets|sync_stocks_sheets_to_db|sync_deposit_db_to_sheets|sync_deposit_sheets_to_db|sync_crypto_db_to_sheets|sync_crypto_sheets_to_db|sync_numismatics_db_to_sheets|sync_numismatics_sheets_to_db|stocks|deposit|crypto|numismatics)'))
