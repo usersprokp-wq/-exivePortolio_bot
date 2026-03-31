@@ -1079,14 +1079,67 @@ async def handle_sell_stock_selected(update: Update, context: CallbackContext, t
 
 async def handle_message_stocks(update: Update, context: CallbackContext):
     """Обробка текстових повідомлень для Акцій"""
-    if 'stock_step' not in context.user_data:
+    if 'stock_step' not in context.user_data and 'profit_step' not in context.user_data:
         return
     
     user_message = update.message.text
     step = context.user_data.get('stock_step')
+    profit_step = context.user_data.get('profit_step')
     
     try:
-        if step == 'date_manual':
+        if profit_step == 'enter_amount':
+            try:
+                write_off_amount = float(user_message)
+                unrealized_profit = context.user_data.get('unrealized_profit', 0)
+                
+                if write_off_amount > unrealized_profit:
+                    await update.message.reply_text(
+                        f"❌ Сума перевищує не списаний прибуток ({unrealized_profit:.2f} $)\n\n"
+                        f"💰 Введіть суму для списання:"
+                    )
+                    return
+                
+                if write_off_amount <= 0:
+                    await update.message.reply_text("❌ Сума має бути більше 0\n\n💰 Введіть суму для списання:")
+                    return
+                
+                Session = context.bot_data.get('Session')
+                if not Session:
+                    await update.message.reply_text("❌ Помилка підключення до бази даних")
+                    return
+                
+                session = Session()
+                
+                profit_record = StockProfitRecord(
+                    operation_date=datetime.now().strftime('%d.%m.%Y'),
+                    operation_type='списання',
+                    amount=write_off_amount,
+                    realized_profit=0,
+                    unrealized_profit=write_off_amount
+                )
+                session.add(profit_record)
+                session.commit()
+                session.close()
+                
+                remaining_profit = unrealized_profit - write_off_amount
+                text = f"✅ *Прибуток списано!*\n\n"
+                text += f"📝 Списано: {write_off_amount:.2f} $\n"
+                text += f"📋 Залишилось: {remaining_profit:.2f} $\n"
+                
+                keyboard = [
+                    [InlineKeyboardButton("💰 До меню прибутків", callback_data='stocks_profit')],
+                    [InlineKeyboardButton("📊 До Акцій", callback_data='stocks')]
+                ]
+                await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+                
+                # Очищуємо дані про прибуток
+                context.user_data.pop('profit_step', None)
+                context.user_data.pop('unrealized_profit', None)
+                
+            except ValueError:
+                await update.message.reply_text("❌ Будь ласка, введіть коректне число\n\n💰 Введіть суму для списання:")
+        
+        elif step == 'date_manual':
             try:
                 datetime.strptime(user_message, '%d.%m.%Y')
                 context.user_data['stock_date'] = user_message
@@ -1304,59 +1357,6 @@ async def handle_message_stocks(update: Update, context: CallbackContext):
                 
             except ValueError:
                 await update.message.reply_text("❌ Будь ласка, введіть коректне число")
-        
-        elif 'profit_step' in context.user_data and context.user_data.get('profit_step') == 'enter_amount':
-            try:
-                write_off_amount = float(user_message)
-                unrealized_profit = context.user_data.get('unrealized_profit', 0)
-                
-                if write_off_amount > unrealized_profit:
-                    await update.message.reply_text(
-                        f"❌ Сума перевищує не списаний прибуток ({unrealized_profit:.2f} $)\n\n"
-                        f"💰 Введіть суму для списання:"
-                    )
-                    return
-                
-                if write_off_amount <= 0:
-                    await update.message.reply_text("❌ Сума має бути більше 0\n\n💰 Введіть суму для списання:")
-                    return
-                
-                Session = context.bot_data.get('Session')
-                if not Session:
-                    await update.message.reply_text("❌ Помилка підключення до бази даних")
-                    return
-                
-                session = Session()
-                
-                from models import StockProfitRecord
-                profit_record = StockProfitRecord(
-                    operation_date=datetime.now().strftime('%d.%m.%Y'),
-                    operation_type='списання',
-                    amount=write_off_amount,
-                    realized_profit=0,
-                    unrealized_profit=write_off_amount
-                )
-                session.add(profit_record)
-                session.commit()
-                session.close()
-                
-                remaining_profit = unrealized_profit - write_off_amount
-                text = f"✅ *Прибуток списано!*\n\n"
-                text += f"📝 Списано: {write_off_amount:.2f} $\n"
-                text += f"📋 Залишилось: {remaining_profit:.2f} $\n"
-                
-                keyboard = [
-                    [InlineKeyboardButton("💰 До меню прибутків", callback_data='stocks_profit')],
-                    [InlineKeyboardButton("📊 До Акцій", callback_data='stocks')]
-                ]
-                await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
-                
-                # Очищуємо дані про прибуток
-                context.user_data.pop('profit_step', None)
-                context.user_data.pop('unrealized_profit', None)
-                
-            except ValueError:
-                await update.message.reply_text("❌ Будь ласка, введіть коректне число\n\n💰 Введіть суму для списання:")
         
         elif step == 'balance_amount':
             try:
