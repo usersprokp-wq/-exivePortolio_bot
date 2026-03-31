@@ -202,8 +202,6 @@ async def show_stocks_menu(update: Update, context: CallbackContext):
         [InlineKeyboardButton("💼 Портфель", callback_data='stocks_portfolio')],
         [InlineKeyboardButton("💰 Прибуток", callback_data='stocks_profit')],
         [InlineKeyboardButton("📊 Статистика", callback_data='stocks_stats')],
-        [InlineKeyboardButton("💵 Дивіденди", callback_data='stocks_dividends')],
-        [InlineKeyboardButton("📈 Взнати PnL", callback_data='stocks_check_pnl')],
         [InlineKeyboardButton("🔙 Назад", callback_data='back_to_menu')]
     ]
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
@@ -562,6 +560,7 @@ async def show_stocks_portfolio(update: Update, context: CallbackContext, platfo
             keyboard = [
                 [InlineKeyboardButton("📊 Всі акції", callback_data='portfolio_all'), InlineKeyboardButton(f"📊 {other_platform}", callback_data=f'portfolio_{other_platform.lower()}')],
                 [InlineKeyboardButton("💵 Оновити залишок", callback_data='update_balance')],
+                [InlineKeyboardButton("💵 Дивіденди", callback_data='stocks_dividends'), InlineKeyboardButton("📈 Взнати PnL", callback_data='stocks_check_pnl')],
                 [InlineKeyboardButton("🔙 Назад", callback_data='stocks')]
             ]
         else:
@@ -569,6 +568,7 @@ async def show_stocks_portfolio(update: Update, context: CallbackContext, platfo
             keyboard = [
                 [InlineKeyboardButton("📊 FF", callback_data='portfolio_ff'), InlineKeyboardButton("📊 IB", callback_data='portfolio_ib')],
                 [InlineKeyboardButton("💵 Оновити залишок", callback_data='update_balance')],
+                [InlineKeyboardButton("💵 Дивіденди", callback_data='stocks_dividends'), InlineKeyboardButton("📈 Взнати PnL", callback_data='stocks_check_pnl')],
                 [InlineKeyboardButton("🔙 Назад", callback_data='stocks')]
             ]
         
@@ -900,8 +900,75 @@ async def show_stocks_stats(update: Update, context: CallbackContext):
     await query.answer()
     
     try:
-        await query.edit_message_text("🚧 Статистика акцій - в розробці", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data='stocks')]]), parse_mode='Markdown')
+        Session = context.bot_data.get('Session')
+        if not Session:
+            await query.edit_message_text("❌ Помилка підключення до бази даних")
+            return
+        
+        session = Session()
+        stocks = session.query(Stock).all()
+        portfolio = session.query(StockPortfolio).all()
+        session.close()
+        
+        if not stocks:
+            keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data='stocks')]]
+            await query.edit_message_text("📭 Немає даних про акції", reply_markup=InlineKeyboardMarkup(keyboard))
+            return
+        
+        # ===== ЗАГАЛЬНА СТАТИСТИКА ПОРТФЕЛЯ =====
+        total_invested = sum(s.total_amount for s in stocks if s.operation_type == 'купівля')
+        total_sold = sum(s.total_amount for s in stocks if s.operation_type == 'продаж')
+        total_pnl = sum(s.pnl or 0 for s in stocks if s.operation_type == 'продаж')
+        current_portfolio_value = sum(p.total_amount for p in portfolio if not p.ticker.endswith('usd'))
+        different_stocks = len(set(s.ticker for s in stocks if s.operation_type == 'купівля'))
+        
+        pnl_percent = (total_pnl / total_invested * 100) if total_invested > 0 else 0
+        
+        # ===== СТАТИСТИКА ПО ОПЕРАЦІЯХ =====
+        sell_operations = [s for s in stocks if s.operation_type == 'продаж']
+        avg_pnl_per_operation = (sum(s.pnl or 0 for s in sell_operations) / len(sell_operations)) if sell_operations else 0
+        
+        # ===== ПО БІРЖАХ =====
+        platforms = {}
+        for s in stocks:
+            if s.operation_type == 'продаж':
+                if s.platform not in platforms:
+                    platforms[s.platform] = {'invested': 0, 'pnl': 0, 'operations': 0}
+                platforms[s.platform]['pnl'] += s.pnl or 0
+                platforms[s.platform]['operations'] += 1
+        
+        for p in portfolio:
+            if not p.ticker.endswith('usd'):
+                if p.platform not in platforms:
+                    platforms[p.platform] = {'invested': 0, 'pnl': 0, 'operations': 0}
+                platforms[p.platform]['invested'] += p.total_amount
+        
+        # ===== ФОРМАТУВАННЯ ВІДПОВІДІ =====
+        text = "📊 *Статистика Акцій*\n\n"
+        
+        text += "💼 *Загальна Статистика Портфеля:*\n"
+        text += f"💵 Загальна сума інвестицій: {total_invested:.2f} $\n"
+        text += f"📈 Поточна вартість портфеля: {current_portfolio_value:.2f} $\n"
+        text += f"📊 Загальний P&L: {total_pnl:.2f} $ ({pnl_percent:+.2f}%)\n"
+        text += f"🔢 Різних акцій: {different_stocks}\n\n"
+        
+        text += "📍 *Статистика По Операціях:*\n"
+        text += f"📈 Середній P&L на операцію: {avg_pnl_per_operation:.2f} $\n"
+        text += f"🔢 Всього операцій продажу: {len(sell_operations)}\n\n"
+        
+        text += "🏛️ *По Біржах:*\n"
+        for platform, data in sorted(platforms.items()):
+            text += f"\n*{platform}:*\n"
+            text += f"  💼 В портфелі: {data['invested']:.2f} $\n"
+            text += f"  📊 P&L: {data['pnl']:.2f} $\n"
+            if data['operations'] > 0:
+                text += f"  🔢 Операцій: {data['operations']}\n"
+        
+        keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data='stocks')]]
+        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+        
     except Exception as e:
+        logger.error(f"Error in show_stocks_stats: {e}")
         await query.edit_message_text(f"❌ Помилка: {str(e)}")
 
 
