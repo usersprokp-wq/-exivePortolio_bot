@@ -252,3 +252,82 @@ async def sync_bonds_to_sheets(update: Update, context: CallbackContext):
     except Exception as e:
         logger.error(f"Error syncing: {e}")
         await query.edit_message_text(f"❌ Помилка синхронізації: {str(e)}")
+
+async def sync_stocks_to_sheets(update: Update, context: CallbackContext):
+    """Синхронізація акцій в Google Sheets"""
+    query = update.callback_query
+    await query.answer()
+    
+    try:
+        sheets_manager = context.bot_data.get('sheets_manager')
+        Session = context.bot_data.get('Session')
+        
+        if not sheets_manager or not Session:
+            await query.edit_message_text("❌ Помилка: Google Sheets або БД не доступні")
+            return
+        
+        session = Session()
+        from models import Stock, StockPortfolio
+        stocks = session.query(Stock).all()
+        
+        if not stocks:
+            session.close()
+            await query.edit_message_text("📭 Немає даних для синхронізації")
+            return
+        
+        # Сортуємо по даті
+        from datetime import datetime as dt
+        def parse_date(date_str):
+            try:
+                return dt.strptime(str(date_str).strip(), '%d.%m.%Y')
+            except:
+                return dt.min
+        
+        stocks = sorted(stocks, key=lambda x: parse_date(x.date), reverse=False)
+        
+        # Готуємо дані записів
+        stocks_data = []
+        for stock in stocks:
+            stocks_data.append({
+                'date': stock.date,
+                'operation_type': stock.operation_type,
+                'ticker': stock.ticker,
+                'name': stock.name,
+                'price_per_unit': stock.price_per_unit,
+                'quantity': stock.quantity,
+                'total_amount': stock.total_amount,
+                'platform': stock.platform,
+                'pnl': stock.pnl or 0
+            })
+        
+        # Експортуємо записи в Google Sheets
+        sheets_manager.export_stocks_to_sheets(stocks_data)
+        
+        # Беремо портфель з stock_portfolio
+        portfolio_records = session.query(StockPortfolio).all()
+        session.close()
+        
+        portfolio_data = []
+        for record in portfolio_records:
+            portfolio_data.append({
+                'ticker': record.ticker,
+                'total_quantity': record.total_quantity,
+                'avg_price': record.avg_price,
+                'total_amount': record.total_amount,
+                'platform': record.platform or '',
+                'percent': record.percent or 0
+            })
+        
+        sheets_manager.export_stocks_portfolio(portfolio_data)
+        
+        text = (
+            f"✅ Синхронізовано!\n\n"
+            f"📋 Записів: {len(stocks_data)}\n"
+            f"💼 Акцій в портфелі: {len(portfolio_data)}"
+        )
+        keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data='sync_stocks')]]
+        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+        
+    except Exception as e:
+        logger.error(f"Error syncing stocks: {e}")
+        await query.edit_message_text(f"❌ Помилка синхронізації: {str(e)}")
