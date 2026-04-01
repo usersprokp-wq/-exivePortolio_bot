@@ -1102,67 +1102,15 @@ async def handle_sell_stock_selected(update: Update, context: CallbackContext, t
 
 async def handle_message_stocks(update: Update, context: CallbackContext):
     """Обробка текстових повідомлень для Акцій"""
-    if 'stock_step' not in context.user_data and 'profit_step' not in context.user_data and 'dividend_step' not in context.user_data:
+    if 'stock_step' not in context.user_data and 'profit_step' not in context.user_data:
         return
     
     user_message = update.message.text
     step = context.user_data.get('stock_step')
     profit_step = context.user_data.get('profit_step')
-    dividend_step = context.user_data.get('dividend_step')
     
     try:
-        if dividend_step == 'ticker':
-            ticker = user_message.upper()
-            context.user_data['dividend_ticker'] = ticker
-            context.user_data['dividend_step'] = 'amount'
-            await update.message.reply_text("💰 Введіть суму дивіденду ($):")
-        
-        elif dividend_step == 'amount':
-            try:
-                amount = float(user_message)
-                if amount <= 0:
-                    await update.message.reply_text("❌ Сума має бути більше 0\n\n💰 Введіть суму дивіденду ($):")
-                    return
-                
-                context.user_data['dividend_amount'] = amount
-                context.user_data['dividend_step'] = 'tax'
-                await update.message.reply_text("🏦 Введіть податок/комісію ($):")
-            except ValueError:
-                await update.message.reply_text("❌ Будь ласка, введіть коректне число\n\n💰 Введіть суму дивіденду ($):")
-        
-        elif dividend_step == 'tax':
-            try:
-                tax = float(user_message)
-                if tax < 0:
-                    await update.message.reply_text("❌ Податок не може бути негативним\n\n🏦 Введіть податок/комісію ($):")
-                    return
-                
-                amount = context.user_data['dividend_amount']
-                net_amount = amount - tax
-                ticker = context.user_data['dividend_ticker']
-                
-                context.user_data['dividend_tax'] = tax
-                context.user_data['dividend_net'] = net_amount
-                
-                # Окошко з підтвердженням
-                text = f"💵 *Підтвердження Дивідендів*\n\n"
-                text += f"📈 Акція: {ticker}\n"
-                text += f"💰 Сума: {amount:.2f} $\n"
-                text += f"🏦 Податок: {tax:.2f} $\n"
-                text += f"📊 PnL: {net_amount:.2f} $\n"
-                
-                keyboard = [
-                    [InlineKeyboardButton("✅ Підтвердити", callback_data='dividend_confirm')],
-                    [InlineKeyboardButton("❌ Скасувати", callback_data='stocks_dividends')]
-                ]
-                await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
-                
-                # Очищуємо dividend_step щоб не обробляти наступні повідомлення
-                context.user_data.pop("dividend_step", None)
-            except ValueError:
-                await update.message.reply_text("❌ Будь ласка, введіть коректне число\n\n🏦 Введіть податок/комісію ($):")
-        
-        elif profit_step == 'enter_amount':
+        if profit_step == 'enter_amount':
             try:
                 write_off_amount = float(user_message)
                 unrealized_profit = context.user_data.get('unrealized_profit', 0)
