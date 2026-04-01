@@ -1615,6 +1615,9 @@ async def confirm_dividend(update: Update, context: CallbackContext):
     query = update.callback_query
     await query.answer()
     
+    # Одразу очищуємо dividend_step
+    context.user_data.pop('dividend_step', None)
+    
     try:
         Session = context.bot_data.get('Session')
         if not Session:
