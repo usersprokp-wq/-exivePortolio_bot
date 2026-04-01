@@ -122,14 +122,17 @@ async def button_handler_stocks(update: Update, context: CallbackContext):
     elif query.data == 'stocks_stats':
         await show_stocks_stats(update, context)
     elif query.data == 'stocks_dividends':
-        await query.edit_message_text("🚧 Дивіденди - в розробці", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data='stocks')]]), parse_mode='Markdown')
+        await show_dividends_selection(update, context)
+    elif query.data.startswith('dividend_'):
+        ticker = query.data.replace('dividend_', '')
+        await handle_dividend_ticker(update, context, ticker)
+    elif query.data == 'dividend_confirm':
+        await confirm_dividend(update, context)
     elif query.data == 'stocks_check_pnl':
         await query.edit_message_text("🚧 Взнати PnL - в розробці", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data='stocks')]]), parse_mode='Markdown')
     elif query.data == 'stocks_profit':
         await show_stocks_profit(update, context)
     elif query.data == 'stocks_write_off_profit':
-        await write_off_stocks_profit_menu(update, context)
-    elif query.data == 'stocks_confirm_write_off':
         context.user_data['profit_step'] = 'enter_amount'
         await query.edit_message_text("💰 Введіть суму для списання:", parse_mode='Markdown')
     elif query.data == 'stocks_sync':
@@ -1019,59 +1022,6 @@ async def show_stocks_profit(update: Update, context: CallbackContext):
         await query.edit_message_text(f"❌ Помилка: {str(e)}")
 
 
-async def write_off_stocks_profit_menu(update: Update, context: CallbackContext):
-    """Меню списання прибутку акцій"""
-    query = update.callback_query
-    await query.answer()
-    
-    logger.info("write_off_stocks_profit_menu called")
-    
-    try:
-        Session = context.bot_data.get('Session')
-        if not Session:
-            await query.edit_message_text("❌ Помилка підключення до бази даних")
-            return
-        
-        session = Session()
-        stocks = session.query(Stock).all()
-        
-        if not stocks:
-            session.close()
-            await query.edit_message_text("📭 Немає даних про акції")
-            return
-        
-        # Реалізований прибуток — сума pnl з операцій продажу
-        total_profit = sum(s.pnl or 0 for s in stocks if s.operation_type == 'продаж')
-        
-        profit_records = session.query(StockProfitRecord).filter(StockProfitRecord.unrealized_profit > 0).all()
-        session.close()
-        
-        total_written_off = sum(r.unrealized_profit for r in profit_records)
-        
-        unrealized_profit = total_profit - total_written_off
-        if unrealized_profit < 0:
-            unrealized_profit = 0
-        
-        context.user_data['unrealized_profit'] = unrealized_profit
-        
-        text = f"💰 *Списання прибутку акцій*\n\n"
-        text += f"📋 Не списаний прибуток: *{unrealized_profit:.2f} $*\n\n"
-        
-        if unrealized_profit > 0:
-            keyboard = [
-                [InlineKeyboardButton("✍️ Списати", callback_data='stocks_confirm_write_off')],
-                [InlineKeyboardButton("🔙 Назад", callback_data='stocks_profit')]
-            ]
-        else:
-            keyboard = [
-                [InlineKeyboardButton("🔙 Назад", callback_data='stocks_profit')]
-            ]
-        
-        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
-        
-    except Exception as e:
-        logger.error(f"Error in write_off_stocks_profit_menu: {e}")
-        await query.edit_message_text(f"❌ Помилка: {str(e)}")
 
 
 async def show_sell_stock_selection(update: Update, context: CallbackContext):
@@ -1493,3 +1443,174 @@ async def handle_message_stocks(update: Update, context: CallbackContext):
     except Exception as e:
         logger.error(f"Error in handle_message_stocks: {e}")
         await update.message.reply_text(f"❌ Помилка: {str(e)}")
+
+
+async def show_dividends_selection(update: Update, context: CallbackContext):
+    """Показати список акцій для внесення дивідендів"""
+    query = update.callback_query
+    
+    try:
+        Session = context.bot_data.get('Session')
+        if not Session:
+            await query.edit_message_text("❌ Помилка підключення до бази даних")
+            return
+        
+        session = Session()
+        portfolio_records = session.query(StockPortfolio).all()
+        session.close()
+        
+        # Фільтруємо — прибираємо залишки (FFusd, IBusd)
+        portfolio_records = [r for r in portfolio_records if not r.ticker.endswith('usd')]
+        
+        if not portfolio_records:
+            keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data='stocks_portfolio')]]
+            await query.edit_message_text("📭 Портфель пустий", reply_markup=InlineKeyboardMarkup(keyboard))
+            return
+        
+        text = "💵 *Дивіденди*\n\nОберіть акцію:"
+        keyboard = []
+        for record in portfolio_records:
+            label = f"{record.ticker} | {record.total_quantity} шт"
+            keyboard.append([InlineKeyboardButton(label, callback_data=f'dividend_{record.ticker}')])
+        
+        keyboard.append([InlineKeyboardButton("📝 Ввести вручну", callback_data='dividend_manual')])
+        keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data='stocks_portfolio')])
+        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+        
+    except Exception as e:
+        logger.error(f"Error in show_dividends_selection: {e}")
+        await query.edit_message_text(f"❌ Помилка: {str(e)}")
+
+
+async def handle_dividend_ticker(update: Update, context: CallbackContext, ticker: str):
+    """Обробка вибору акції для дивідендів"""
+    query = update.callback_query
+    
+    if ticker == 'manual':
+        context.user_data['dividend_step'] = 'ticker'
+        await query.edit_message_text("📝 Введіть тікер акції:", parse_mode='Markdown')
+    else:
+        context.user_data['dividend_ticker'] = ticker
+        context.user_data['dividend_step'] = 'amount'
+        await query.edit_message_text(f"💵 Акція: {ticker}\n\n💰 Введіть суму дивіденду ($):", parse_mode='Markdown')
+
+
+async def handle_message_dividends(update: Update, context: CallbackContext):
+    """Обробка текстових повідомлень для дивідендів"""
+    if 'dividend_step' not in context.user_data:
+        return
+    
+    user_message = update.message.text
+    step = context.user_data.get('dividend_step')
+    
+    try:
+        if step == 'ticker':
+            ticker = user_message.upper()
+            context.user_data['dividend_ticker'] = ticker
+            context.user_data['dividend_step'] = 'amount'
+            await update.message.reply_text(f"💰 Введіть суму дивіденду ($):")
+        
+        elif step == 'amount':
+            try:
+                amount = float(user_message)
+                if amount <= 0:
+                    await update.message.reply_text("❌ Сума має бути більше 0\n\n💰 Введіть суму дивіденду ($):")
+                    return
+                
+                context.user_data['dividend_amount'] = amount
+                context.user_data['dividend_step'] = 'tax'
+                await update.message.reply_text("🏦 Введіть податок/комісію ($):")
+            except ValueError:
+                await update.message.reply_text("❌ Будь ласка, введіть коректне число\n\n💰 Введіть суму дивіденду ($):")
+        
+        elif step == 'tax':
+            try:
+                tax = float(user_message)
+                if tax < 0:
+                    await update.message.reply_text("❌ Податок не може бути негативним\n\n🏦 Введіть податок/комісію ($):")
+                    return
+                
+                amount = context.user_data['dividend_amount']
+                net_amount = amount - tax
+                ticker = context.user_data['dividend_ticker']
+                
+                context.user_data['dividend_tax'] = tax
+                context.user_data['dividend_net'] = net_amount
+                
+                # Окошко з підтвердженням
+                text = f"💵 *Підтвердження Дивідендів*\n\n"
+                text += f"📈 Акція: {ticker}\n"
+                text += f"💰 Сума: {amount:.2f} $\n"
+                text += f"🏦 Податок: {tax:.2f} $\n"
+                text += f"✨ Чисте: {net_amount:.2f} $\n"
+                
+                keyboard = [
+                    [InlineKeyboardButton("✅ Підтвердити", callback_data='dividend_confirm')],
+                    [InlineKeyboardButton("❌ Скасувати", callback_data='stocks_dividends')]
+                ]
+                await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+                
+            except ValueError:
+                await update.message.reply_text("❌ Будь ласка, введіть коректне число\n\n🏦 Введіть податок/комісію ($):")
+    
+    except Exception as e:
+        logger.error(f"Error in handle_message_dividends: {e}")
+        await update.message.reply_text(f"❌ Помилка: {str(e)}")
+
+
+async def confirm_dividend(update: Update, context: CallbackContext):
+    """Підтвердження та збереження дивідендів"""
+    query = update.callback_query
+    await query.answer()
+    
+    try:
+        Session = context.bot_data.get('Session')
+        if not Session:
+            await query.edit_message_text("❌ Помилка підключення до бази даних")
+            return
+        
+        ticker = context.user_data['dividend_ticker']
+        amount = context.user_data['dividend_amount']
+        tax = context.user_data['dividend_tax']
+        net_amount = context.user_data['dividend_net']
+        
+        session = Session()
+        
+        # Зберігаємо запис в таблицю stocks
+        stock = Stock(
+            date=datetime.now().strftime('%d.%m.%Y'),
+            operation_type='дивіденди',
+            ticker=ticker,
+            name=ticker,
+            price_per_unit=0,
+            quantity=0,
+            total_amount=amount,
+            platform='',
+            pnl=net_amount
+        )
+        session.add(stock)
+        session.commit()
+        session.close()
+        
+        text = f"✅ *Дивіденди додано!*\n\n"
+        text += f"📈 Акція: {ticker}\n"
+        text += f"💰 Сума: {amount:.2f} $\n"
+        text += f"🏦 Податок: {tax:.2f} $\n"
+        text += f"✨ Чисте: {net_amount:.2f} $\n"
+        
+        keyboard = [
+            [InlineKeyboardButton("💼 До портфеля", callback_data='stocks_portfolio')],
+            [InlineKeyboardButton("📊 До Акцій", callback_data='stocks')]
+        ]
+        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+        
+        # Очищуємо дані про дивіденди
+        context.user_data.pop('dividend_step', None)
+        context.user_data.pop('dividend_ticker', None)
+        context.user_data.pop('dividend_amount', None)
+        context.user_data.pop('dividend_tax', None)
+        context.user_data.pop('dividend_net', None)
+        
+    except Exception as e:
+        logger.error(f"Error in confirm_dividend: {e}")
+        await query.edit_message_text(f"❌ Помилка: {str(e)}")
