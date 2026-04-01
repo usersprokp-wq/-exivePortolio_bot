@@ -1102,7 +1102,13 @@ async def handle_sell_stock_selected(update: Update, context: CallbackContext, t
 
 async def handle_message_stocks(update: Update, context: CallbackContext):
     """Обробка текстових повідомлень для Акцій"""
-    if 'stock_step' not in context.user_data and 'profit_step' not in context.user_data:
+    # Перевіряємо чи є якийсь активний крок
+    if 'stock_step' not in context.user_data and 'profit_step' not in context.user_data and 'dividend_step' not in context.user_data:
+        return
+    
+    # Якщо це дивіденди - передаємо в окремий обробник
+    if 'dividend_step' in context.user_data:
+        await handle_message_dividends(update, context)
         return
     
     user_message = update.message.text
