@@ -1149,7 +1149,7 @@ async def handle_message_stocks(update: Update, context: CallbackContext):
                 text += f"📈 Акція: {ticker}\n"
                 text += f"💰 Сума: {amount:.2f} $\n"
                 text += f"🏦 Податок: {tax:.2f} $\n"
-                text += f"✨ Чисте: {net_amount:.2f} $\n"
+                text += f"📊 PnL: {net_amount:.2f} $\n"
                 
                 keyboard = [
                     [InlineKeyboardButton("✅ Підтвердити", callback_data='dividend_confirm')],
@@ -1157,6 +1157,8 @@ async def handle_message_stocks(update: Update, context: CallbackContext):
                 ]
                 await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
                 
+                # Очищуємо dividend_step щоб не обробляти наступні повідомлення
+                context.user_data.pop("dividend_step", None)
             except ValueError:
                 await update.message.reply_text("❌ Будь ласка, введіть коректне число\n\n🏦 Введіть податок/комісію ($):")
         
@@ -1592,7 +1594,7 @@ async def handle_message_dividends(update: Update, context: CallbackContext):
                 text += f"📈 Акція: {ticker}\n"
                 text += f"💰 Сума: {amount:.2f} $\n"
                 text += f"🏦 Податок: {tax:.2f} $\n"
-                text += f"✨ Чисте: {net_amount:.2f} $\n"
+                text += f"📊 PnL: {net_amount:.2f} $\n"
                 
                 keyboard = [
                     [InlineKeyboardButton("✅ Підтвердити", callback_data='dividend_confirm')],
@@ -1646,7 +1648,7 @@ async def confirm_dividend(update: Update, context: CallbackContext):
         text += f"📈 Акція: {ticker}\n"
         text += f"💰 Сума: {amount:.2f} $\n"
         text += f"🏦 Податок: {tax:.2f} $\n"
-        text += f"✨ Чисте: {net_amount:.2f} $\n"
+        text += f"📊 PnL: {net_amount:.2f} $\n"
         
         keyboard = [
             [InlineKeyboardButton("💼 До портфеля", callback_data='stocks_portfolio')],
