@@ -122,6 +122,12 @@ async def button_handler_stocks(update: Update, context: CallbackContext):
     elif query.data == 'stocks_stats':
         await show_stocks_stats(update, context)
     elif query.data == 'stocks_dividends':
+        # Очищуємо дані про дивіденди якщо скасували
+        context.user_data.pop('dividend_step', None)
+        context.user_data.pop('dividend_ticker', None)
+        context.user_data.pop('dividend_amount', None)
+        context.user_data.pop('dividend_tax', None)
+        context.user_data.pop('dividend_net', None)
         await show_dividends_selection(update, context)
     elif query.data.startswith('dividend_'):
         ticker = query.data.replace('dividend_', '')
@@ -1556,9 +1562,6 @@ async def handle_message_dividends(update: Update, context: CallbackContext):
                 ]
                 await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
                 
-                # Очищуємо dividend_step щоб не обробляти повторно
-                context.user_data.pop('dividend_step', None)
-                
             except ValueError:
                 await update.message.reply_text("❌ Будь ласка, введіть коректне число\n\n🏦 Введіть податок/комісію ($):")
     
@@ -1572,19 +1575,20 @@ async def confirm_dividend(update: Update, context: CallbackContext):
     query = update.callback_query
     await query.answer()
     
-    # Одразу очищуємо dividend_step
-    context.user_data.pop('dividend_step', None)
-    
     try:
         Session = context.bot_data.get('Session')
         if not Session:
             await query.edit_message_text("❌ Помилка підключення до бази даних")
             return
         
-        ticker = context.user_data['dividend_ticker']
-        amount = context.user_data['dividend_amount']
-        tax = context.user_data['dividend_tax']
-        net_amount = context.user_data['dividend_net']
+        ticker = context.user_data.get('dividend_ticker')
+        amount = context.user_data.get('dividend_amount')
+        tax = context.user_data.get('dividend_tax')
+        net_amount = context.user_data.get('dividend_net')
+        
+        if not all([ticker, amount is not None, tax is not None, net_amount is not None]):
+            await query.edit_message_text("❌ Помилка: дані дивідендів відсутні")
+            return
         
         session = Session()
         
