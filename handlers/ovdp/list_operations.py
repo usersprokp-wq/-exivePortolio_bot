@@ -48,12 +48,10 @@ async def show_bonds_list(update: Update, context: CallbackContext, page: int = 
         
         for bond in bonds_page:
             op_icon = "🟢" if bond.operation_type == 'купівля' else "🔴"
-            text += f"{op_icon} *{bond.operation_type.capitalize()}*\n"
-            text += f"   📅 {bond.date}\n"
-            text += f"   🔢 {bond.bond_number}\n"
-            text += f"   📦 {bond.quantity} шт × {bond.price_per_unit:.2f} грн\n"
-            text += f"   💵 {bond.total_amount:.2f} грн\n"
-            text += f"   🏦 {bond.platform}\n\n"
+            text += f"📅 {bond.date} | 🏦 {bond.platform}\n"
+            text += f"🔢 {bond.bond_number} | {op_icon} {bond.operation_type.capitalize()}\n"
+            text += f"📦 {bond.quantity} шт × {bond.price_per_unit:.2f} грн\n"
+            text += f"💵 {bond.total_amount:.2f} грн\n\n"
         
         # Кнопки пагінації
         keyboard = []
