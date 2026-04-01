@@ -12,6 +12,10 @@ from .add_operations import (
     show_bond_calendar,
     handle_bond_calendar_navigation,
     show_sell_bond_selection,
+    handle_sell_bond_selected,    # 👈 ЦЕ ВАЖЛИВО!
+    handle_message_ovdp,
+    save_bond_sell,
+    save_bond,
 )
 
 # Список операцій
@@ -35,6 +39,15 @@ from .pnl import show_pnl_portfolio
 # Статистика
 from .statistics import show_statistics
 
+# Синхронізація
+from .sync import sync_bonds_from_sheets
+
+# Баланс
+from .balance import (
+    recalculate_bond_percents,
+    handle_balance_platform_selected,
+)
+
 __all__ = [
     # Головне меню
     'show_ovdp_menu',
@@ -45,6 +58,10 @@ __all__ = [
     'show_bond_calendar',
     'handle_bond_calendar_navigation',
     'show_sell_bond_selection',
+    'handle_sell_bond_selected',    # 👈 І ТУТ ТЕЖЕ!
+    'handle_message_ovdp',
+    'save_bond_sell',
+    'save_bond',
     
     # Список
     'show_bonds_list',
@@ -62,4 +79,11 @@ __all__ = [
     
     # Статистика
     'show_statistics',
+    
+    # Синхронізація
+    'sync_bonds_from_sheets',
+    
+    # Баланс
+    'recalculate_bond_percents',
+    'handle_balance_platform_selected',
 ]
