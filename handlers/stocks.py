@@ -1556,6 +1556,9 @@ async def handle_message_dividends(update: Update, context: CallbackContext):
                 ]
                 await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
                 
+                # Очищуємо dividend_step щоб не обробляти повторно
+                context.user_data.pop('dividend_step', None)
+                
             except ValueError:
                 await update.message.reply_text("❌ Будь ласка, введіть коректне число\n\n🏦 Введіть податок/комісію ($):")
     
