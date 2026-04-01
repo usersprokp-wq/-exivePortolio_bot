@@ -5,7 +5,7 @@ import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import CallbackContext
 from models import Bond
-from utils import fetch_bond_price_icu, calculate_current_portfolio
+from .utils import fetch_bond_price_icu, calculate_current_portfolio
 
 logger = logging.getLogger(__name__)
 

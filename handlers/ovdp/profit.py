@@ -6,7 +6,7 @@ from datetime import datetime
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import CallbackContext
 from models import Bond, ProfitRecord
-from utils import calculate_profit_by_price, calculate_monthly_profit
+from .utils import calculate_profit_by_price, calculate_monthly_profit
 
 logger = logging.getLogger(__name__)
 

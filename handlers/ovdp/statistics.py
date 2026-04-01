@@ -5,7 +5,7 @@ import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import CallbackContext
 from models import Bond
-from utils import calculate_profit_by_price
+from .utils import calculate_profit_by_price
 
 logger = logging.getLogger(__name__)
 
