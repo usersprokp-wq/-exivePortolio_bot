@@ -8,7 +8,7 @@ from models import Bond
 
 logger = logging.getLogger(__name__)
 
-ITEMS_PER_PAGE = 10
+ITEMS_PER_PAGE = 5
 
 
 async def show_bonds_list(update: Update, context: CallbackContext, page: int = 1):
