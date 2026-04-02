@@ -1,7 +1,7 @@
 """
 Модуль для роботи з ОВДП (облігаціями внутрішньої державної позики)
 """
-from telegram import Update
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import CallbackContext
 
 # Головне меню
@@ -49,19 +49,29 @@ async def handle_balance_platform_selection(update: Update, context: CallbackCon
     """Обробка вибору платформи для оновлення залишку"""
     query = update.callback_query
     await query.answer()
-    
-    # Отримуємо платформу з callback_data
+
+    # Отримуємо платформу з callback_data: 'ovdp_balance_platform_icu' -> 'ICU'
     platform = query.data.replace('ovdp_balance_platform_', '').upper()
-    
-    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
-    
+
+    # Зберігаємо платформу і встановлюємо крок для handle_message_ovdp
+    context.user_data['ovdp_balance_platform'] = platform
+    context.user_data['bond_step'] = 'ovdp_balance_amount'
+
+    # Отримуємо поточний залишок з БД
+    Session = context.bot_data.get('Session')
+    current_amount = 0
+    if Session:
+        from models import BondPortfolio
+        session = Session()
+        ticker = f"{platform.lower()}uah"
+        current = session.query(BondPortfolio).filter(BondPortfolio.bond_number == ticker).first()
+        session.close()
+        current_amount = current.total_amount if current else 0
+
     await query.edit_message_text(
-        f"🔄 *Оновлення залишку для {platform}*\n\n"
-        f"⏳ Функція в розробці...\n\n"
-        f"Тут буде логіка отримання актуального залишку з {platform}",
-        reply_markup=InlineKeyboardMarkup([[
-            InlineKeyboardButton("🔙 Назад до портфеля", callback_data='ovdp_portfolio')
-        ]]),
+        f"💵 *Залишок {platform}*\n\n"
+        f"Поточний залишок: {current_amount:.2f} грн\n\n"
+        f"Введіть нову суму залишку:",
         parse_mode='Markdown'
     )
 
@@ -69,38 +79,38 @@ async def handle_balance_platform_selection(update: Update, context: CallbackCon
 __all__ = [
     # Головне меню
     'show_ovdp_menu',
-    
+
     # Додавання операцій
     'start_bond_add',
     'handle_date_selection',
     'show_bond_calendar',
     'handle_bond_calendar_navigation',
     'show_sell_bond_selection',
-    'handle_sell_bond_selected',    # 👈 І ТУТ ТЕЖЕ!
+    'handle_sell_bond_selected',
     'handle_message_ovdp',
     'save_bond_sell',
     'save_bond',
-    
+
     # Список
     'show_bonds_list',
-    
+
     # Портфель
     'show_portfolio',
     'update_balance_platform_selection',
-    
+
     # Прибутки
     'show_profit',
     'write_off_profit',
-    
+
     # PnL
     'show_pnl_portfolio',
-    
+
     # Статистика
     'show_statistics',
-    
+
     # Синхронізація
     'sync_bonds_from_sheets',
-    
+
     # Оновлення залишку
-    'handle_balance_platform_selection',  # 👈 ДОДАНО!
+    'handle_balance_platform_selection',
 ]
