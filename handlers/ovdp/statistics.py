@@ -82,7 +82,13 @@ async def show_statistics(update: Update, context: CallbackContext):
         # По місяцях
         if monthly:
             text += f"📅 *По місяцях:*\n"
-            for month in sorted(monthly.keys(), reverse=True):
+            def month_sort_key(m):
+                try:
+                    parts = m.split('.')
+                    return (int(parts[1]), int(parts[0]))
+                except Exception:
+                    return (0, 0)
+            for month in sorted(monthly.keys(), key=month_sort_key, reverse=False):
                 text += f"   {month}: {monthly[month]:+.2f} грн\n"
             text += "\n"
 
