@@ -120,9 +120,14 @@ async def show_portfolio(update: Update, context: CallbackContext, platform: str
             filter_buttons.append(InlineKeyboardButton("🏦 Всі", callback_data='ovdp_portfolio'))
         
         # Додаємо кнопки платформ (крім активної)
-        if platform != 'icu':
+        if platform and platform.lower() != 'icu':
             filter_buttons.append(InlineKeyboardButton("🏦 ICU", callback_data='portfolio_icu'))
-        if platform != 'sensbank':
+        elif not platform:
+            filter_buttons.append(InlineKeyboardButton("🏦 ICU", callback_data='portfolio_icu'))
+            
+        if platform and platform.lower() != 'sensbank':
+            filter_buttons.append(InlineKeyboardButton("🏦 SENSBANK", callback_data='portfolio_sensbank'))
+        elif not platform:
             filter_buttons.append(InlineKeyboardButton("🏦 SENSBANK", callback_data='portfolio_sensbank'))
         
         # Кнопки
