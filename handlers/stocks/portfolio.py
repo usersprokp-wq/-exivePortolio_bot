@@ -24,17 +24,17 @@ async def show_stocks_portfolio(update: Update, context: CallbackContext, platfo
             return
 
         session = Session()
-        portfolio_records = session.query(StockPortfolio).order_by(StockPortfolio.last_update.desc()).all()
+        all_records = session.query(StockPortfolio).order_by(StockPortfolio.last_update.desc()).all()
         session.close()
 
-        if not portfolio_records:
+        if not all_records:
             keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data='stocks')]]
             await query.edit_message_text("📭 Портфель пустий", reply_markup=InlineKeyboardMarkup(keyboard))
             return
 
         if platform:
             platform = platform.upper()
-            filtered = [p for p in portfolio_records if p.platform == platform]
+            filtered = [p for p in all_records if p.platform == platform and not p.ticker.endswith('usd')]
             if not filtered:
                 keyboard = [
                     [InlineKeyboardButton("📊 FF", callback_data='portfolio_ff'), InlineKeyboardButton("📊 IB", callback_data='portfolio_ib')],
@@ -45,13 +45,15 @@ async def show_stocks_portfolio(update: Update, context: CallbackContext, platfo
                 except Exception as e:
                     logger.error(f"Error editing message: {e}")
                 return
-            portfolio_records = filtered
-
-        stock_records = sorted(
-            [r for r in portfolio_records if not r.ticker.endswith('usd')],
-            key=lambda r: r.total_amount, reverse=True
-        )
-        balance_records = [r for r in portfolio_records if r.ticker.endswith('usd')]
+            stock_records = sorted(filtered, key=lambda r: r.total_amount, reverse=True)
+            # Залишок тільки активної біржі
+            balance_records = [r for r in all_records if r.ticker.lower() == f"{platform.lower()}usd"]
+        else:
+            stock_records = sorted(
+                [r for r in all_records if not r.ticker.endswith('usd')],
+                key=lambda r: r.total_amount, reverse=True
+            )
+            balance_records = [r for r in all_records if r.ticker.endswith('usd')]
 
         # Пагінація тільки для акцій
         total_stocks = len(stock_records)
@@ -61,7 +63,7 @@ async def show_stocks_portfolio(update: Update, context: CallbackContext, platfo
         start_idx = (page - 1) * PORTFOLIO_PER_PAGE
         page_stocks = stock_records[start_idx:start_idx + PORTFOLIO_PER_PAGE]
 
-        # Підрахунок загальної суми (всі акції + залишки)
+        # Загальна сума: всі акції + залишки поточного фільтру
         total_invested = sum(r.total_amount for r in stock_records) + sum(r.total_amount for r in balance_records)
 
         text = f"💼 *Портфель Акцій*"
@@ -76,7 +78,8 @@ async def show_stocks_portfolio(update: Update, context: CallbackContext, platfo
             text += f"   💰 Ціна: {record.avg_price:.2f} $\n"
             text += f"   💵 Сума: {record.total_amount:.2f} $\n\n"
 
-        if page == total_pages and balance_records:
+        # Залишки завжди на кожній сторінці
+        if balance_records:
             text += "💵 *Залишки на рахунках:*\n"
             for br in balance_records:
                 text += f"   {br.ticker}: {br.total_amount:.2f} $ ({br.percent or 0:.1f}%)\n"
@@ -90,7 +93,10 @@ async def show_stocks_portfolio(update: Update, context: CallbackContext, platfo
             pagination_buttons = []
             for p in range(1, total_pages + 1):
                 label = f"[{p}]" if p == page else str(p)
-                cb = f"portfolio_page_{p}" if not platform else f"portfolio_{platform.lower()}_page_{p}"
+                if platform:
+                    cb = f"portfolio_{platform.lower()}_page_{p}"
+                else:
+                    cb = f"portfolio_page_{p}"
                 pagination_buttons.append(InlineKeyboardButton(label, callback_data=cb))
             keyboard.append(pagination_buttons)
 
