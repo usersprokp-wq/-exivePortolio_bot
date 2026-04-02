@@ -7,7 +7,6 @@ from collections import defaultdict
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import CallbackContext
 from models import Bond, BondPortfolio
-from .balance import recalculate_bond_percents
 
 logger = logging.getLogger(__name__)
 
@@ -232,7 +231,6 @@ async def sync_bonds_from_sheets(update: Update, context: CallbackContext):
                 session.add(record)
         
         session.commit()
-        recalculate_bond_percents(session)
         session.close()
         
         text += f"\n✅ Портфель оновлено!"

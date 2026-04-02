@@ -33,7 +33,6 @@ from handlers.ovdp import (
     # Портфель
     show_portfolio,
     update_balance_platform_selection,
-    handle_balance_platform_selected,
     
     # Прибутки
     show_profit,
@@ -218,14 +217,6 @@ def register_ovdp_handlers(application: Application):
     application.add_handler(CallbackQueryHandler(
         update_balance_platform_selection,
         pattern='^ovdp_update_balance$'
-    ))
-    application.add_handler(CallbackQueryHandler(
-        lambda u, c: handle_balance_platform_selected(u, c, 'ICU'),
-        pattern='^ovdp_balance_platform_icu$'
-    ))
-    application.add_handler(CallbackQueryHandler(
-        lambda u, c: handle_balance_platform_selected(u, c, 'SENSBANK'),
-        pattern='^ovdp_balance_platform_sensbank$'
     ))
     
     # ───────────────────────────────────────────────────────
