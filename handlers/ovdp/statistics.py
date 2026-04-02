@@ -63,15 +63,6 @@ async def show_statistics(update: Update, context: CallbackContext):
                 except Exception:
                     pass
 
-        # ── По платформах ─────────────────────────────────
-        platforms = {}
-        for b in bonds:
-            p = (b.platform or '').upper()
-            if p not in platforms:
-                platforms[p] = {'count': 0, 'amount': 0}
-            platforms[p]['count'] += 1
-            platforms[p]['amount'] += b.total_amount
-
         # ── Формуємо текст ────────────────────────────────
         text = "📊 *Статистика ОВДП*\n\n"
 
@@ -94,12 +85,6 @@ async def show_statistics(update: Update, context: CallbackContext):
             for month in sorted(monthly.keys(), reverse=True):
                 text += f"   {month}: {monthly[month]:+.2f} грн\n"
             text += "\n"
-
-        # По платформах
-        if platforms:
-            text += f"🏦 *По платформах:*\n"
-            for platform, data in sorted(platforms.items()):
-                text += f"   {platform}: {data['count']} операцій · {data['amount']:.0f} грн\n"
 
         keyboard = [[InlineKeyboardButton("🔙 Назад до ОВДП", callback_data='ovdp')]]
 
