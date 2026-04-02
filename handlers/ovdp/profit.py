@@ -146,7 +146,6 @@ async def write_off_profit(update: Update, context: CallbackContext):
         context.user_data['profit_step'] = 'enter_amount'
 
         keyboard = [
-            [InlineKeyboardButton("✍️ Списати", callback_data='confirm_write_off')],
             [InlineKeyboardButton("🔙 Назад", callback_data='ovdp_profit')]
         ]
 
