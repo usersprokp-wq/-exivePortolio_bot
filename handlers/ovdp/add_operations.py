@@ -43,7 +43,8 @@ async def handle_date_selection(update: Update, context: CallbackContext):
         context.user_data['bond_step'] = 'operation_type'
         keyboard = [
             [InlineKeyboardButton("🟢 Купівля", callback_data='bond_buy')],
-            [InlineKeyboardButton("🔴 Продаж", callback_data='bond_sell')]
+            [InlineKeyboardButton("🔴 Продаж", callback_data='bond_sell')],
+            [InlineKeyboardButton("🔙 Назад", callback_data='ovdp_add')]
         ]
         await query.edit_message_text(
             f"📅 Дата: {date_value}\n\n📈 Виберіть тип операції:",
@@ -52,7 +53,12 @@ async def handle_date_selection(update: Update, context: CallbackContext):
         )
     else:
         context.user_data['bond_step'] = 'date_manual'
-        await query.edit_message_text("📅 Введіть дату вручну (у форматі ДД.ММ.РРРР):", parse_mode='Markdown')
+        await query.edit_message_text(
+            "📅 Введіть дату вручну (у форматі ДД.ММ.РРРР):\n\n"
+            "Або натисніть кнопку нижче:",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data='ovdp_add')]]),
+            parse_mode='Markdown'
+        )
 
 
 async def show_bond_calendar(update: Update, context: CallbackContext):
@@ -140,7 +146,10 @@ async def show_sell_bond_selection(update: Update, context: CallbackContext):
             return
         
         session = Session()
-        portfolio_records = session.query(BondPortfolio).all()
+        portfolio_records = [
+            r for r in session.query(BondPortfolio).all()
+            if not r.bond_number.endswith('uah')
+        ]
         session.close()
         
         if not portfolio_records:
@@ -198,6 +207,7 @@ async def handle_sell_bond_selected(update: Update, context: CallbackContext, bo
             f"📦 В портфелі: {portfolio_record.total_quantity} шт\n"
             f"💰 Середня ціна купівлі: {portfolio_record.avg_price:.2f} грн\n\n"
             f"💵 Введіть ціну продажу за одну облігацію:",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data='bond_sell')]]),
             parse_mode='Markdown'
         )
         
@@ -227,7 +237,8 @@ async def handle_message_ovdp(update: Update, context: CallbackContext):
                 context.user_data['bond_step'] = 'operation_type'
                 keyboard = [
                     [InlineKeyboardButton("🟢 Купівля", callback_data='bond_buy')],
-                    [InlineKeyboardButton("🔴 Продаж", callback_data='bond_sell')]
+                    [InlineKeyboardButton("🔴 Продаж", callback_data='bond_sell')],
+                    [InlineKeyboardButton("🔙 Назад", callback_data='ovdp_add')]
                 ]
                 await update.message.reply_text(
                     f"📅 Дата: {user_message}\n\n📈 Виберіть тип операції:",
@@ -241,14 +252,20 @@ async def handle_message_ovdp(update: Update, context: CallbackContext):
             # Тільки для купівлі — продаж іде через кнопки
             context.user_data['bond_number'] = user_message
             context.user_data['bond_step'] = 'maturity_date'
-            await update.message.reply_text("📆 Введіть термін погашення (ДД.ММ.РРРР):")
+            await update.message.reply_text(
+                "📆 Введіть термін погашення (ДД.ММ.РРРР):",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data='ovdp_add')]]),
+            )
         
         elif step == 'maturity_date':
             try:
                 datetime.strptime(user_message, '%d.%m.%Y')
                 context.user_data['maturity_date'] = user_message
                 context.user_data['bond_step'] = 'price_per_unit'
-                await update.message.reply_text("💰 Введіть ціну за одну облігацію:")
+                await update.message.reply_text(
+                    "💰 Введіть ціну за одну облігацію:",
+                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data='ovdp_add')]]),
+                )
             except ValueError:
                 await update.message.reply_text("❌ Невірний формат дати. Будь ласка, введіть у форматі ДД.ММ.РРРР")
         
@@ -257,7 +274,10 @@ async def handle_message_ovdp(update: Update, context: CallbackContext):
                 price = float(user_message)
                 context.user_data['price_per_unit'] = price
                 context.user_data['bond_step'] = 'quantity'
-                await update.message.reply_text("📦 Введіть кількість облігацій:")
+                await update.message.reply_text(
+                    "📦 Введіть кількість облігацій:",
+                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data='ovdp_add')]]),
+                )
             except ValueError:
                 await update.message.reply_text("❌ Будь ласка, введіть коректне число")
         
@@ -270,7 +290,8 @@ async def handle_message_ovdp(update: Update, context: CallbackContext):
                 context.user_data['bond_step'] = 'platform'
                 keyboard = [
                     [InlineKeyboardButton("🏦 ICU", callback_data='platform_icu')],
-                    [InlineKeyboardButton("🏦 SENSBANK", callback_data='platform_sensbank')]
+                    [InlineKeyboardButton("🏦 SENSBANK", callback_data='platform_sensbank')],
+                    [InlineKeyboardButton("🔙 Назад", callback_data='ovdp_add')]
                 ]
                 await update.message.reply_text(
                     f"💵 Сума: {total_amount:.2f} грн\n\n🏦 Виберіть платформу:",
@@ -287,7 +308,8 @@ async def handle_message_ovdp(update: Update, context: CallbackContext):
                 max_qty = context.user_data['sell_max_quantity']
                 await update.message.reply_text(
                     f"💵 Ціна продажу: {price:.2f} грн\n\n"
-                    f"📦 Введіть кількість (максимум {max_qty} шт):"
+                    f"📦 Введіть кількість (максимум {max_qty} шт):",
+                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data='bond_sell')]]),
                 )
             except ValueError:
                 await update.message.reply_text("❌ Будь ласка, введіть коректне число")
