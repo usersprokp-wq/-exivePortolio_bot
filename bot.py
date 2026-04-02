@@ -33,6 +33,7 @@ from handlers.ovdp import (
     # Портфель
     show_portfolio,
     update_balance_platform_selection,
+    handle_balance_platform_selection,  # 👈 ДОДАНО!
     
     # Прибутки
     show_profit,
@@ -213,10 +214,16 @@ def register_ovdp_handlers(application: Application):
         pattern='^portfolio_sensbank$'
     ))
     
-    # Оновлення залишків
+    # Оновлення залишків - вибір платформи
     application.add_handler(CallbackQueryHandler(
         update_balance_platform_selection,
         pattern='^ovdp_update_balance$'
+    ))
+    
+    # 👇 НОВИЙ ОБРОБНИК ДЛЯ ВИБОРУ ПЛАТФОРМИ (ICU або SENSBANK)
+    application.add_handler(CallbackQueryHandler(
+        handle_balance_platform_selection,
+        pattern='^ovdp_balance_platform_'
     ))
     
     # ───────────────────────────────────────────────────────
