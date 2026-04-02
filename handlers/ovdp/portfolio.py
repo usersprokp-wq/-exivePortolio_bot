@@ -170,6 +170,7 @@ async def show_portfolio(update: Update, context: CallbackContext, platform: str
 async def update_balance_platform_selection(update: Update, context: CallbackContext):
     """Вибір платформи для оновлення залишку"""
     query = update.callback_query
+    await query.answer()
     
     keyboard = [
         [InlineKeyboardButton("🏦 ICU", callback_data='ovdp_balance_platform_icu')],
@@ -180,5 +181,27 @@ async def update_balance_platform_selection(update: Update, context: CallbackCon
     await query.edit_message_text(
         "💵 *Оновлення залишку*\n\nОберіть платформу:",
         reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='Markdown'
+    )
+
+
+async def handle_balance_platform_selection(update: Update, context: CallbackContext):
+    """Обробка вибору платформи для оновлення залишку"""
+    query = update.callback_query
+    await query.answer()
+    
+    # Отримуємо платформу з callback_data
+    platform = query.data.replace('ovdp_balance_platform_', '').upper()
+    
+    # TODO: Тут додати логіку оновлення залишку для вибраної платформи
+    # Наприклад, викликати функцію з sync.py або іншого модуля
+    
+    await query.edit_message_text(
+        f"🔄 *Оновлення залишку для {platform}*\n\n"
+        f"⏳ Функція в розробці...\n\n"
+        f"Тут буде логіка отримання актуального залишку з {platform}",
+        reply_markup=InlineKeyboardMarkup([[
+            InlineKeyboardButton("🔙 Назад до портфеля", callback_data='ovdp_portfolio')
+        ]]),
         parse_mode='Markdown'
     )
