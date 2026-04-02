@@ -33,7 +33,7 @@ from handlers.ovdp import (
     # Портфель
     show_portfolio,
     update_balance_platform_selection,
-    handle_balance_platform_selection,  # 👈 ДОДАНО!
+    handle_balance_platform_selection, # 👈 ДОДАНО!
     
     # Прибутки
     show_profit,
