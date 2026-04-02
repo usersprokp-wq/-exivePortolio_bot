@@ -83,6 +83,20 @@ async def button_handler_stocks(update: Update, context: CallbackContext):
         await show_stocks_portfolio(update, context, platform='IB')
     elif data == 'portfolio_all':
         await show_stocks_portfolio(update, context, platform=None)
+
+    # Пагінація портфеля (без фільтру)
+    elif data.startswith('portfolio_page_'):
+        page = int(data.replace('portfolio_page_', ''))
+        await show_stocks_portfolio(update, context, page=page)
+    # Пагінація портфеля FF
+    elif data.startswith('portfolio_ff_page_'):
+        page = int(data.replace('portfolio_ff_page_', ''))
+        await show_stocks_portfolio(update, context, platform='FF', page=page)
+    # Пагінація портфеля IB
+    elif data.startswith('portfolio_ib_page_'):
+        page = int(data.replace('portfolio_ib_page_', ''))
+        await show_stocks_portfolio(update, context, platform='IB', page=page)
+
     elif data == 'update_balance':
         await handle_update_balance(update, context)
     elif data.startswith('balance_platform_'):

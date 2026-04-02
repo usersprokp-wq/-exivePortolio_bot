@@ -9,8 +9,10 @@ from .utils import recalculate_percents
 
 logger = logging.getLogger(__name__)
 
+PORTFOLIO_PER_PAGE = 5
 
-async def show_stocks_portfolio(update: Update, context: CallbackContext, platform=None):
+
+async def show_stocks_portfolio(update: Update, context: CallbackContext, platform=None, page=1):
     """Показати портфель акцій з таблиці stock_portfolio"""
     query = update.callback_query
     await query.answer()
@@ -51,41 +53,66 @@ async def show_stocks_portfolio(update: Update, context: CallbackContext, platfo
         )
         balance_records = [r for r in portfolio_records if r.ticker.endswith('usd')]
 
-        text = "💼 *Портфель Акцій*\n\n"
-        total_invested = 0
+        # Пагінація тільки для акцій
+        total_stocks = len(stock_records)
+        total_pages = max(1, (total_stocks + PORTFOLIO_PER_PAGE - 1) // PORTFOLIO_PER_PAGE)
+        page = max(1, min(page, total_pages))
 
-        for record in stock_records:
+        start_idx = (page - 1) * PORTFOLIO_PER_PAGE
+        page_stocks = stock_records[start_idx:start_idx + PORTFOLIO_PER_PAGE]
+
+        # Підрахунок загальної суми (всі акції + залишки)
+        total_invested = sum(r.total_amount for r in stock_records) + sum(r.total_amount for r in balance_records)
+
+        text = f"💼 *Портфель Акцій*"
+        if platform:
+            text += f" — {platform}"
+        text += f" (стор. {page}/{total_pages})\n\n"
+
+        for record in page_stocks:
             pct = record.percent or 0
             text += f"📈 *{record.ticker}* ({pct:.1f}%)\n"
             text += f"   📦 Кількість: {record.total_quantity} шт\n"
             text += f"   💰 Ціна: {record.avg_price:.2f} $\n"
             text += f"   💵 Сума: {record.total_amount:.2f} $\n\n"
-            total_invested += record.total_amount
 
-        if balance_records:
+        if page == total_pages and balance_records:
             text += "💵 *Залишки на рахунках:*\n"
             for br in balance_records:
                 text += f"   {br.ticker}: {br.total_amount:.2f} $ ({br.percent or 0:.1f}%)\n"
-                total_invested += br.total_amount
             text += "\n"
 
         text += f"━━━━━━━━━━━━━━━━━━━━\n📊 *Всього інвестовано:* {total_invested:.2f} $"
 
+        # Кнопки пагінації
+        keyboard = []
+        if total_pages > 1:
+            pagination_buttons = []
+            for p in range(1, total_pages + 1):
+                label = f"[{p}]" if p == page else str(p)
+                cb = f"portfolio_page_{p}" if not platform else f"portfolio_{platform.lower()}_page_{p}"
+                pagination_buttons.append(InlineKeyboardButton(label, callback_data=cb))
+            keyboard.append(pagination_buttons)
+
+        # Кнопки фільтрів
         if platform:
             other = 'IB' if platform == 'FF' else 'FF'
-            keyboard = [
-                [InlineKeyboardButton("📊 Всі акції", callback_data='portfolio_all'), InlineKeyboardButton(f"📊 {other}", callback_data=f'portfolio_{other.lower()}')],
-                [InlineKeyboardButton("💵 Оновити залишок", callback_data='update_balance')],
-                [InlineKeyboardButton("💵 Дивіденди", callback_data='stocks_dividends'), InlineKeyboardButton("📈 Взнати PnL", callback_data='stocks_check_pnl')],
-                [InlineKeyboardButton("🔙 Назад", callback_data='stocks')]
-            ]
+            keyboard.append([
+                InlineKeyboardButton("📊 Всі акції", callback_data='portfolio_all'),
+                InlineKeyboardButton(f"📊 {other}", callback_data=f'portfolio_{other.lower()}')
+            ])
         else:
-            keyboard = [
-                [InlineKeyboardButton("📊 FF", callback_data='portfolio_ff'), InlineKeyboardButton("📊 IB", callback_data='portfolio_ib')],
-                [InlineKeyboardButton("💵 Оновити залишок", callback_data='update_balance')],
-                [InlineKeyboardButton("💵 Дивіденди", callback_data='stocks_dividends'), InlineKeyboardButton("📈 Взнати PnL", callback_data='stocks_check_pnl')],
-                [InlineKeyboardButton("🔙 Назад", callback_data='stocks')]
-            ]
+            keyboard.append([
+                InlineKeyboardButton("📊 FF", callback_data='portfolio_ff'),
+                InlineKeyboardButton("📊 IB", callback_data='portfolio_ib')
+            ])
+
+        keyboard.append([InlineKeyboardButton("💵 Оновити залишок", callback_data='update_balance')])
+        keyboard.append([
+            InlineKeyboardButton("💵 Дивіденди", callback_data='stocks_dividends'),
+            InlineKeyboardButton("📈 Взнати PnL", callback_data='stocks_check_pnl')
+        ])
+        keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data='stocks')])
 
         try:
             await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
@@ -93,7 +120,7 @@ async def show_stocks_portfolio(update: Update, context: CallbackContext, platfo
             error_msg = str(e).lower()
             if "not modified" in error_msg or "400" in error_msg:
                 await query.answer(
-                    f"📊 Портфель: {len(portfolio_records)} акцій" + (f" на {platform}" if platform else ""),
+                    f"📊 Портфель: {total_stocks} акцій" + (f" на {platform}" if platform else ""),
                     show_alert=False
                 )
             else:

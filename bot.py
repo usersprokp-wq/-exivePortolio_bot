@@ -33,7 +33,7 @@ from handlers.ovdp import (
     # Портфель
     show_portfolio,
     update_balance_platform_selection,
-    handle_balance_platform_selection, # 👈 ДОДАНО!
+    handle_balance_platform_selection,
     
     # Прибутки
     show_profit,
@@ -130,46 +130,16 @@ def register_ovdp_handlers(application: Application):
     
     logger.info("Реєструємо обробники ОВДП...")
     
-    # ───────────────────────────────────────────────────────
-    # ГОЛОВНЕ МЕНЮ
-    # ───────────────────────────────────────────────────────
     application.add_handler(CallbackQueryHandler(show_ovdp_menu, pattern='^ovdp$'))
-    
-    # ───────────────────────────────────────────────────────
-    # ДОДАВАННЯ ОПЕРАЦІЙ
-    # ───────────────────────────────────────────────────────
-    
-    # Старт додавання
     application.add_handler(CallbackQueryHandler(start_bond_add, pattern='^ovdp_add$'))
-    
-    # Вибір дати
     application.add_handler(CallbackQueryHandler(handle_date_selection, pattern='^date_'))
-    
-    # Навігація по календарю
-    application.add_handler(CallbackQueryHandler(
-        handle_bond_calendar_navigation, 
-        pattern='^cal_(prev|next)_'
-    ))
-    
-    # Вибір типу операції
-    application.add_handler(CallbackQueryHandler(
-        handle_operation_buy,
-        pattern='^bond_buy$'
-    ))
-    
-    # Продаж - показати список
-    application.add_handler(CallbackQueryHandler(
-        show_sell_bond_selection,
-        pattern='^bond_sell$'
-    ))
-    
-    # Продаж - вибрано облігацію
+    application.add_handler(CallbackQueryHandler(handle_bond_calendar_navigation, pattern='^cal_(prev|next)_'))
+    application.add_handler(CallbackQueryHandler(handle_operation_buy, pattern='^bond_buy$'))
+    application.add_handler(CallbackQueryHandler(show_sell_bond_selection, pattern='^bond_sell$'))
     application.add_handler(CallbackQueryHandler(
         lambda u, c: handle_sell_bond_selected(u, c, u.callback_query.data.replace('sell_bond_', '')),
         pattern='^sell_bond_'
     ))
-    
-    # Вибір платформи (для купівлі)
     application.add_handler(CallbackQueryHandler(
         lambda u, c: handle_platform_buy(u, c, 'ICU'),
         pattern='^platform_icu$'
@@ -178,33 +148,18 @@ def register_ovdp_handlers(application: Application):
         lambda u, c: handle_platform_buy(u, c, 'SENSBANK'),
         pattern='^platform_sensbank$'
     ))
-    
-    # ───────────────────────────────────────────────────────
-    # СПИСОК ОПЕРАЦІЙ
-    # ───────────────────────────────────────────────────────
-    
     application.add_handler(CallbackQueryHandler(
         lambda u, c: show_bonds_list(u, c, 1),
         pattern='^ovdp_list$'
     ))
-    
-    # Пагінація списку
     application.add_handler(CallbackQueryHandler(
         lambda u, c: show_bonds_list(u, c, int(u.callback_query.data.replace('bonds_list_page_', ''))),
         pattern='^bonds_list_page_'
     ))
-    
-    # ───────────────────────────────────────────────────────
-    # ПОРТФЕЛЬ
-    # ───────────────────────────────────────────────────────
-    
-    # Показ всього портфеля
     application.add_handler(CallbackQueryHandler(
         lambda u, c: show_portfolio(u, c),
         pattern='^ovdp_portfolio$'
     ))
-    
-    # Портфель по платформах
     application.add_handler(CallbackQueryHandler(
         lambda u, c: show_portfolio(u, c, 'ICU'),
         pattern='^portfolio_icu$'
@@ -213,45 +168,15 @@ def register_ovdp_handlers(application: Application):
         lambda u, c: show_portfolio(u, c, 'SENSBANK'),
         pattern='^portfolio_sensbank$'
     ))
-    
-    # Оновлення залишків - вибір платформи
-    application.add_handler(CallbackQueryHandler(
-        update_balance_platform_selection,
-        pattern='^ovdp_update_balance$'
-    ))
-    
-    # 👇 НОВИЙ ОБРОБНИК ДЛЯ ВИБОРУ ПЛАТФОРМИ (ICU або SENSBANK)
-    application.add_handler(CallbackQueryHandler(
-        handle_balance_platform_selection,
-        pattern='^ovdp_balance_platform_'
-    ))
-    
-    # ───────────────────────────────────────────────────────
-    # ПРИБУТКИ
-    # ───────────────────────────────────────────────────────
-    
+    application.add_handler(CallbackQueryHandler(update_balance_platform_selection, pattern='^ovdp_update_balance$'))
+    application.add_handler(CallbackQueryHandler(handle_balance_platform_selection, pattern='^ovdp_balance_platform_'))
     application.add_handler(CallbackQueryHandler(show_profit, pattern='^ovdp_profit$'))
     application.add_handler(CallbackQueryHandler(write_off_profit, pattern='^write_off_profit$'))
     application.add_handler(CallbackQueryHandler(write_off_profit, pattern='^confirm_write_off$'))
-    
-    # ───────────────────────────────────────────────────────
-    # PNL
-    # ───────────────────────────────────────────────────────
-    
     application.add_handler(CallbackQueryHandler(show_pnl_portfolio, pattern='^pnl_portfolio$'))
-    
-    # ───────────────────────────────────────────────────────
-    # СТАТИСТИКА
-    # ───────────────────────────────────────────────────────
-    
     application.add_handler(CallbackQueryHandler(show_statistics, pattern='^ovdp_stats$'))
-    
-    # ───────────────────────────────────────────────────────
-    # СИНХРОНІЗАЦІЯ
-    # ───────────────────────────────────────────────────────
-    
     application.add_handler(CallbackQueryHandler(
-        sync_bonds_from_sheets, 
+        sync_bonds_from_sheets,
         pattern='^(sync_ovdp_sheets_to_db|sync_sheets_to_db)$'
     ))
     
@@ -277,42 +202,55 @@ async def handle_message_unified(update: Update, context: CallbackContext):
 def main():
     """Головна функція запуску бота"""
     
-    # Ініціалізуємо БД та Google Sheets
     if not initialize_database():
         logger.error("Не вдалося підключитися до БД. Вихід.")
         return
     
     initialize_sheets()
     
-    # Створюємо Application
     app = Application.builder().token(BOT_TOKEN).build()
-    
-    # Встановлюємо post_init
     app.post_init = post_init
-    
-    # ═══════════════════════════════════════════════════════════
-    # РЕЄСТРУЄМО ВСІ ОБРОБНИКИ (ВАЖЛИВО: порядок має значення!)
-    # ═══════════════════════════════════════════════════════════
     
     # 1. Команда /start
     app.add_handler(CommandHandler("start", start))
     
-    # 2. ОВДП обробники (НОВІ, модульні) 👈 ЦЕ НОВОЕ!
+    # 2. ОВДП обробники
     register_ovdp_handlers(app)
     
-    # 3. Акції обробники (старі, не чіпаємо)
+    # 3. Акції — портфель пагінація (додано portfolio_ff, portfolio_ib, portfolio_all, portfolio_page_)
     app.add_handler(CallbackQueryHandler(
-        button_handler_stocks, 
-        pattern=r'^(stocks|stocks_add|stocks_list|stocks_list_page_|stocks_date_|stocks_portfolio|stocks_stats|stocks_dividends|stocks_check_pnl|stocks_profit|stocks_write_off_profit|stocks_sync|stocks_sync_from_sheets|stocks_cal_|stock_buy|stock_sell|sell_stock_|stock_platform_|update_balance|balance_platform_|dividend_)'
+        button_handler_stocks,
+        pattern=(
+            r'^('
+            r'stocks|stocks_add|stocks_list|stocks_list_page_\d+|'
+            r'stocks_date_|stocks_portfolio|stocks_stats|stocks_dividends|'
+            r'stocks_check_pnl|stocks_profit|stocks_write_off_profit|'
+            r'stocks_sync|stocks_sync_from_sheets|stocks_cal_|'
+            r'stock_buy|stock_sell|sell_stock_|stock_platform_|'
+            r'update_balance|balance_platform_|dividend_|'
+            r'portfolio_ff|portfolio_ib|portfolio_all|'
+            r'portfolio_page_\d+|portfolio_ff_page_\d+|portfolio_ib_page_\d+'
+            r').*$'
+        )
     ))
     
     # 4. Головне меню та спільні функції
     app.add_handler(CallbackQueryHandler(
-        button_handler_main, 
-        pattern=r'^(back_to_menu|analysis|sync|sync_ovdp|sync_stocks|sync_deposit|sync_crypto|sync_numismatics|sync_ovdp_db_to_sheets|sync_stocks_db_to_sheets|sync_stocks_sheets_to_db|sync_deposit_db_to_sheets|sync_deposit_sheets_to_db|sync_crypto_db_to_sheets|sync_crypto_sheets_to_db|sync_numismatics_db_to_sheets|sync_numismatics_sheets_to_db|stocks|deposit|crypto|numismatics)'
+        button_handler_main,
+        pattern=(
+            r'^('
+            r'back_to_menu|analysis|sync|sync_ovdp|sync_stocks|sync_deposit|'
+            r'sync_crypto|sync_numismatics|sync_ovdp_db_to_sheets|'
+            r'sync_stocks_db_to_sheets|sync_stocks_sheets_to_db|'
+            r'sync_deposit_db_to_sheets|sync_deposit_sheets_to_db|'
+            r'sync_crypto_db_to_sheets|sync_crypto_sheets_to_db|'
+            r'sync_numismatics_db_to_sheets|sync_numismatics_sheets_to_db|'
+            r'stocks|deposit|crypto|numismatics'
+            r')$'
+        )
     ))
     
-    # 5. Обробка текстових повідомлень (об'єднана для всіх портфелів)
+    # 5. Текстові повідомлення
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message_unified))
     
     logger.info("🚀 Бот запущений...")
