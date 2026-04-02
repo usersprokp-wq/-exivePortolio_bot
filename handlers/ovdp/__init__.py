@@ -1,6 +1,8 @@
 """
 Модуль для роботи з ОВДП (облігаціями внутрішньої державної позики)
 """
+from telegram import Update
+from telegram.ext import CallbackContext
 
 # Головне меню
 from .main_menu import show_ovdp_menu
@@ -42,6 +44,28 @@ from .statistics import show_statistics
 # Синхронізація
 from .sync import sync_bonds_from_sheets
 
+
+async def handle_balance_platform_selection(update: Update, context: CallbackContext):
+    """Обробка вибору платформи для оновлення залишку"""
+    query = update.callback_query
+    await query.answer()
+    
+    # Отримуємо платформу з callback_data
+    platform = query.data.replace('ovdp_balance_platform_', '').upper()
+    
+    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+    
+    await query.edit_message_text(
+        f"🔄 *Оновлення залишку для {platform}*\n\n"
+        f"⏳ Функція в розробці...\n\n"
+        f"Тут буде логіка отримання актуального залишку з {platform}",
+        reply_markup=InlineKeyboardMarkup([[
+            InlineKeyboardButton("🔙 Назад до портфеля", callback_data='ovdp_portfolio')
+        ]]),
+        parse_mode='Markdown'
+    )
+
+
 __all__ = [
     # Головне меню
     'show_ovdp_menu',
@@ -76,4 +100,7 @@ __all__ = [
     
     # Синхронізація
     'sync_bonds_from_sheets',
+    
+    # Оновлення залишку
+    'handle_balance_platform_selection',  # 👈 ДОДАНО!
 ]
