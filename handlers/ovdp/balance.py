@@ -1,8 +1,7 @@
 """
-Оновлення залишків на рахунках та перерахунок відсотків портфеля
+Перегляд портфеля ОВДП
 """
 import logging
-from datetime import datetime
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import CallbackContext
 from models import BondPortfolio
@@ -10,30 +9,137 @@ from models import BondPortfolio
 logger = logging.getLogger(__name__)
 
 
-def recalculate_bond_percents(session):
-    """Перераховує відсотки кожної облігації в портфелі"""
+async def show_portfolio(update: Update, context: CallbackContext, platform: str = None):
+    """Показати портфель ОВДП"""
+    query = update.callback_query
+    
     try:
-        portfolio = session.query(BondPortfolio).all()
-        
-        # Рахуємо загальну суму портфеля (без uah-залишків)
-        total_value = sum(
-            p.total_amount for p in portfolio 
-            if not p.bond_number.endswith('uah')
-        )
-        
-        if total_value == 0:
+        Session = context.bot_data.get('Session')
+        if not Session:
+            await query.edit_message_text("❌ Помилка підключення до бази даних")
             return
         
-        # Оновлюємо відсотки
-        for record in portfolio:
-            if not record.bond_number.endswith('uah'):
-                record.percent = (record.total_amount / total_value * 100) if total_value > 0 else 0
+        session = Session()
         
-        session.commit()
+        # Фільтруємо по платформі якщо вказано
+        if platform:
+            portfolio = session.query(BondPortfolio).filter(
+                BondPortfolio.platform == platform.upper()
+            ).all()
+        else:
+            portfolio = session.query(BondPortfolio).all()
+        
+        session.close()
+        
+        if not portfolio:
+            keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data='ovdp')]]
+            text = f"📭 *Портфель {'(' + platform.upper() + ')' if platform else ''} пустий*"
+            await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+            return
+        
+        # Групуємо облігації по номеру
+        bonds_grouped = {}
+        balances = []
+        total_portfolio_amount = 0
+        
+        for record in portfolio:
+            if record.bond_number.endswith('uah'):
+                # Залишки на рахунках
+                balances.append(record)
+                total_portfolio_amount += record.total_amount
+            else:
+                # Облігації
+                total_portfolio_amount += record.total_amount
+                if record.bond_number not in bonds_grouped:
+                    bonds_grouped[record.bond_number] = {
+                        'maturity_date': record.maturity_date,
+                        'records': []
+                    }
+                bonds_grouped[record.bond_number]['records'].append(record)
+        
+        # Формуємо текст
+        platform_text = f" ({platform.upper()})" if platform else ""
+        text = f"💼 *Портфель ОВДП{platform_text}*\n\n"
+        
+        total_qty = 0
+        total_amount = 0
+        
+        # Виводимо згруповані облігації
+        for bond_number in sorted(bonds_grouped.keys()):
+            bond_data = bonds_grouped[bond_number]
+            records = bond_data['records']
+            
+            # Підрахунки по облігації
+            bond_total_qty = sum(r.total_quantity for r in records)
+            bond_total_amount = sum(r.total_amount for r in records)
+            bond_avg_price = bond_total_amount / bond_total_qty if bond_total_qty > 0 else 0
+            bond_percent = (bond_total_amount / total_portfolio_amount * 100) if total_portfolio_amount > 0 else 0
+            
+            # Платформи де є ця облігація
+            platforms = sorted(set(r.platform for r in records))
+            platforms_text = " | ".join(platforms)
+            
+            text += f"🔢 *{bond_number}* 📊 {bond_percent:.1f}%\n"
+            text += f"   📆 Погашення: {bond_data['maturity_date']}\n"
+            text += f"   📦 Кількість: {bond_total_qty} шт\n"
+            text += f"   💰 Середня ціна: {bond_avg_price:.2f} грн\n"
+            text += f"   💵 Сума: {bond_total_amount:.2f} грн\n"
+            text += f"   🏦 {platforms_text}\n\n"
+            
+            total_qty += bond_total_qty
+            total_amount += bond_total_amount
+        
+        # Виводимо залишки
+        for balance in balances:
+            text += f"💰 *{balance.platform} Залишок*\n"
+            text += f"   💵 {balance.total_amount:.2f} грн\n\n"
+            total_amount += balance.total_amount
+        
+        text += f"━━━━━━━━━━━━━━━━━━━━━━\n"
+        text += f"📊 *Всього:*\n"
+        if total_qty > 0:
+            text += f"   📦 {total_qty} облігацій\n"
+        text += f"   💵 {total_amount:.2f} грн"
+        
+        # Динамічні кнопки фільтрації
+        filter_buttons = []
+        
+        # Нормалізуємо платформу до нижнього регістру для порівняння
+        platform_lower = platform.lower() if platform else None
+        
+        if platform_lower:
+            # Якщо є фільтр - показуємо кнопку "Всі"
+            filter_buttons.append(InlineKeyboardButton("🏦 Всі", callback_data='ovdp_portfolio'))
+        
+        # Додаємо кнопки платформ (крім активної)
+        if platform_lower != 'icu':
+            filter_buttons.append(InlineKeyboardButton("🏦 ICU", callback_data='portfolio_icu'))
+        if platform_lower != 'sensbank':
+            filter_buttons.append(InlineKeyboardButton("🏦 SENSBANK", callback_data='portfolio_sensbank'))
+        
+        # Кнопки
+        keyboard = [
+            [InlineKeyboardButton("💹 Взнати PnL", callback_data='pnl_portfolio')],
+        ]
+        
+        # Додаємо кнопки фільтрів якщо вони є
+        if filter_buttons:
+            keyboard.append(filter_buttons)
+        
+        keyboard.extend([
+            [InlineKeyboardButton("💵 Оновити залишок", callback_data='ovdp_update_balance')],
+            [InlineKeyboardButton("🔙 Назад", callback_data='ovdp')]
+        ])
+        
+        await query.edit_message_text(
+            text,
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode='Markdown'
+        )
         
     except Exception as e:
-        logger.error(f"Error recalculating bond percents: {e}")
-        session.rollback()
+        logger.error(f"Error in show_portfolio: {e}")
+        await query.edit_message_text(f"❌ Помилка: {str(e)}")
 
 
 async def update_balance_platform_selection(update: Update, context: CallbackContext):
@@ -48,25 +154,6 @@ async def update_balance_platform_selection(update: Update, context: CallbackCon
     
     await query.edit_message_text(
         "💵 *Оновлення залишку*\n\nОберіть платформу:",
-        reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode='Markdown'
-    )
-
-
-async def handle_balance_platform_selected(update: Update, context: CallbackContext, platform: str):
-    """Обробка вибору платформи для оновлення залишку"""
-    query = update.callback_query
-    
-    context.user_data['ovdp_balance_platform'] = platform
-    context.user_data['bond_step'] = 'ovdp_balance_amount'
-    
-    keyboard = [
-        [InlineKeyboardButton("🔙 Назад", callback_data='ovdp_update_balance')]
-    ]
-    
-    await query.edit_message_text(
-        f"💵 *Оновлення залишку {platform}*\n\n"
-        f"Введіть нову суму залишку:",
         reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode='Markdown'
     )

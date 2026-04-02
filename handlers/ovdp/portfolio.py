@@ -104,14 +104,17 @@ async def show_portfolio(update: Update, context: CallbackContext, platform: str
         # Динамічні кнопки фільтрації
         filter_buttons = []
         
-        if platform:
+        # Нормалізуємо платформу до нижнього регістру для порівняння
+        platform_lower = platform.lower() if platform else None
+        
+        if platform_lower:
             # Якщо є фільтр - показуємо кнопку "Всі"
             filter_buttons.append(InlineKeyboardButton("🏦 Всі", callback_data='ovdp_portfolio'))
         
         # Додаємо кнопки платформ (крім активної)
-        if platform != 'icu':
+        if platform_lower != 'icu':
             filter_buttons.append(InlineKeyboardButton("🏦 ICU", callback_data='portfolio_icu'))
-        if platform != 'sensbank':
+        if platform_lower != 'sensbank':
             filter_buttons.append(InlineKeyboardButton("🏦 SENSBANK", callback_data='portfolio_sensbank'))
         
         # Кнопки
