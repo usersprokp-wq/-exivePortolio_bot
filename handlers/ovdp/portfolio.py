@@ -130,15 +130,18 @@ async def show_portfolio(update: Update, context: CallbackContext, platform: str
         elif not platform:
             filter_buttons.append(InlineKeyboardButton("🏦 SENSBANK", callback_data='portfolio_sensbank'))
         
-        # Кнопки
-        keyboard = [
-            [InlineKeyboardButton("💹 Взнати PnL", callback_data='pnl_portfolio')],
-        ]
+        # Формуємо клавіатуру
+        keyboard = []
+        
+        # Додаємо кнопку PnL тільки якщо НЕМАЄ фільтрації по платформі
+        if not platform:
+            keyboard.append([InlineKeyboardButton("💹 Взнати PnL", callback_data='pnl_portfolio')])
         
         # Додаємо кнопки фільтрів якщо вони є
         if filter_buttons:
             keyboard.append(filter_buttons)
         
+        # Додаємо завжди присутні кнопки
         keyboard.extend([
             [InlineKeyboardButton("💵 Оновити залишок", callback_data='ovdp_update_balance')],
             [InlineKeyboardButton("🔙 Назад", callback_data='ovdp')]
