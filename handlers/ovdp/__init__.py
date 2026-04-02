@@ -72,6 +72,9 @@ async def handle_balance_platform_selection(update: Update, context: CallbackCon
         f"💵 *Залишок {platform}*\n\n"
         f"Поточний залишок: {current_amount:.2f} грн\n\n"
         f"Введіть нову суму залишку:",
+        reply_markup=InlineKeyboardMarkup([[
+            InlineKeyboardButton("🔙 Назад", callback_data='ovdp_update_balance')
+        ]]),
         parse_mode='Markdown'
     )
 
