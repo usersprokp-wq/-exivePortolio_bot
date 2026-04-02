@@ -5,6 +5,7 @@ import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import CallbackContext
 from models import BondPortfolio
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -193,15 +194,24 @@ async def handle_balance_platform_selection(update: Update, context: CallbackCon
     # Отримуємо платформу з callback_data
     platform = query.data.replace('ovdp_balance_platform_', '').upper()
     
-    # TODO: Тут додати логіку оновлення залишку для вибраної платформи
-    # Наприклад, викликати функцію з sync.py або іншого модуля
+    # Зберігаємо в контекст
+    context.user_data['ovdp_balance_platform'] = platform
+    context.user_data['bond_step'] = 'ovdp_balance_amount'
+    
+    ticker = f"{platform}uah"
+    
+    Session = context.bot_data.get('Session')
+    if Session:
+        session = Session()
+        current = session.query(BondPortfolio).filter(BondPortfolio.bond_number == ticker).first()
+        session.close()
+        current_amount = current.total_amount if current else 0
+    else:
+        current_amount = 0
     
     await query.edit_message_text(
-        f"🔄 *Оновлення залишку для {platform}*\n\n"
-        f"⏳ Функція в розробці...\n\n"
-        f"Тут буде логіка отримання актуального залишку з {platform}",
-        reply_markup=InlineKeyboardMarkup([[
-            InlineKeyboardButton("🔙 Назад до портфеля", callback_data='ovdp_portfolio')
-        ]]),
+        f"💵 *Залишок {platform}*\n\n"
+        f"Поточний залишок: {current_amount:.2f} грн\n\n"
+        f"Введіть нову суму залишку:",
         parse_mode='Markdown'
     )
