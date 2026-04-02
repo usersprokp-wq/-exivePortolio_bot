@@ -12,8 +12,17 @@ logger = logging.getLogger(__name__)
 async def show_portfolio(update: Update, context: CallbackContext, platform: str = None):
     """Показати портфель ОВДП"""
     query = update.callback_query
+    session = None
     
     try:
+        # Отримуємо платформу з callback_data якщо вона там є
+        if not platform and query.data:
+            # Наприклад: 'portfolio_icu' -> 'icu'
+            if query.data.startswith('portfolio_'):
+                platform = query.data.replace('portfolio_', '').lower()
+        
+        await query.answer()  # Закриваємо loading spinner
+        
         Session = context.bot_data.get('Session')
         if not Session:
             await query.edit_message_text("❌ Помилка підключення до бази даних")
@@ -21,15 +30,17 @@ async def show_portfolio(update: Update, context: CallbackContext, platform: str
         
         session = Session()
         
-        # Фільтруємо по платформі якщо вказано
-        if platform:
-            portfolio = session.query(BondPortfolio).filter(
-                BondPortfolio.platform == platform.upper()
-            ).all()
-        else:
-            portfolio = session.query(BondPortfolio).all()
-        
-        session.close()
+        try:
+            # Фільтруємо по платформі якщо вказано
+            if platform:
+                portfolio = session.query(BondPortfolio).filter(
+                    BondPortfolio.platform == platform.upper()
+                ).all()
+            else:
+                portfolio = session.query(BondPortfolio).all()
+        finally:
+            session.close()
+            session = None
         
         if not portfolio:
             keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data='ovdp')]]
@@ -104,17 +115,14 @@ async def show_portfolio(update: Update, context: CallbackContext, platform: str
         # Динамічні кнопки фільтрації
         filter_buttons = []
         
-        # Нормалізуємо платформу до нижнього регістру для порівняння
-        platform_lower = platform.lower() if platform else None
-        
-        if platform_lower:
+        if platform:
             # Якщо є фільтр - показуємо кнопку "Всі"
             filter_buttons.append(InlineKeyboardButton("🏦 Всі", callback_data='ovdp_portfolio'))
         
         # Додаємо кнопки платформ (крім активної)
-        if platform_lower != 'icu':
+        if platform != 'icu':
             filter_buttons.append(InlineKeyboardButton("🏦 ICU", callback_data='portfolio_icu'))
-        if platform_lower != 'sensbank':
+        if platform != 'sensbank':
             filter_buttons.append(InlineKeyboardButton("🏦 SENSBANK", callback_data='portfolio_sensbank'))
         
         # Кнопки
@@ -138,8 +146,17 @@ async def show_portfolio(update: Update, context: CallbackContext, platform: str
         )
         
     except Exception as e:
-        logger.error(f"Error in show_portfolio: {e}")
-        await query.edit_message_text(f"❌ Помилка: {str(e)}")
+        logger.error(f"Error in show_portfolio: {e}", exc_info=True)
+        try:
+            await query.edit_message_text(f"❌ Помилка: {str(e)[:100]}")
+        except Exception as edit_error:
+            logger.error(f"Failed to edit message: {edit_error}")
+    finally:
+        if session:
+            try:
+                session.close()
+            except Exception as close_error:
+                logger.error(f"Error closing session: {close_error}")
 
 
 async def update_balance_platform_selection(update: Update, context: CallbackContext):
