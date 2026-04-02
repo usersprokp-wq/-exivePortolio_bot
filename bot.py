@@ -226,7 +226,7 @@ def main():
             r'stocks_date_|stocks_portfolio|stocks_stats|stocks_dividends|'
             r'stocks_check_pnl|stocks_profit|stocks_write_off_profit|'
             r'stocks_sync|stocks_sync_from_sheets|stocks_cal_|'
-            r'stock_buy|stock_sell|sell_stock_|stock_platform_|'
+            r'stock_buy|stock_sell|stock_dividend|sell_stock_|stock_platform_|'
             r'update_balance|balance_platform_|dividend_|'
             r'portfolio_ff|portfolio_ib|portfolio_all|'
             r'portfolio_page_\d+|portfolio_ff_page_\d+|portfolio_ib_page_\d+'

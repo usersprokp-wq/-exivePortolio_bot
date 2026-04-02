@@ -17,7 +17,7 @@ def _clear_dividend_data(context: CallbackContext):
 
 
 async def show_dividends_selection(update: Update, context: CallbackContext):
-    """Показати список акцій для внесення дивідендів"""
+    """Показати список акцій для внесення дивідендів (з портфеля — legacy)"""
     query = update.callback_query
     _clear_dividend_data(context)
 
@@ -33,17 +33,12 @@ async def show_dividends_selection(update: Update, context: CallbackContext):
 
         portfolio_records = [r for r in portfolio_records if not r.ticker.endswith('usd')]
 
-        if not portfolio_records:
-            keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data='stocks_portfolio')]]
-            await query.edit_message_text("📭 Портфель пустий", reply_markup=InlineKeyboardMarkup(keyboard))
-            return
-
         keyboard = [
             [InlineKeyboardButton(f"{r.ticker} | {r.total_quantity} шт", callback_data=f'dividend_{r.ticker}')]
             for r in portfolio_records
         ]
         keyboard.append([InlineKeyboardButton("📝 Ввести вручну", callback_data='dividend_manual')])
-        keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data='stocks_portfolio')])
+        keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data='stocks_add')])
 
         await query.edit_message_text(
             "💵 *Дивіденди*\n\nОберіть акцію:",
@@ -111,7 +106,7 @@ async def confirm_dividend(update: Update, context: CallbackContext):
             f"📊 PnL: {net_amount:.2f} $\n"
         )
         keyboard = [
-            [InlineKeyboardButton("💼 До портфеля", callback_data='stocks_portfolio')],
+            [InlineKeyboardButton("➕ Додати ще", callback_data='stocks_add')],
             [InlineKeyboardButton("📊 До Акцій", callback_data='stocks')]
         ]
         await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
@@ -171,7 +166,7 @@ async def handle_message_dividends(update: Update, context: CallbackContext):
                 )
                 keyboard = [
                     [InlineKeyboardButton("✅ Підтвердити", callback_data='dividend_confirm')],
-                    [InlineKeyboardButton("❌ Скасувати", callback_data='stocks_dividends')]
+                    [InlineKeyboardButton("❌ Скасувати", callback_data='stocks_add')]
                 ]
                 await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
 

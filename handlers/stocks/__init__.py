@@ -5,7 +5,8 @@ from telegram.ext import CallbackContext
 
 from .add import (
     start_stock_add, handle_stock_date_selection, handle_calendar_navigation,
-    show_sell_stock_selection, handle_sell_stock_selected, save_stock, handle_message_add
+    show_sell_stock_selection, handle_sell_stock_selected, save_stock, handle_message_add,
+    show_dividend_selection_from_add
 )
 from .records import show_stocks_list
 from .portfolio import show_stocks_portfolio, handle_update_balance, handle_balance_platform, handle_message_balance
@@ -59,6 +60,8 @@ async def button_handler_stocks(update: Update, context: CallbackContext):
     elif data == 'stock_sell':
         context.user_data['stock_operation_type'] = 'продаж'
         await show_sell_stock_selection(update, context)
+    elif data == 'stock_dividend':
+        await show_dividend_selection_from_add(update, context)
     elif data.startswith('sell_stock_'):
         ticker = data.replace('sell_stock_', '')
         await handle_sell_stock_selected(update, context, ticker)
