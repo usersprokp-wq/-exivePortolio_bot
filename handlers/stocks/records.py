@@ -43,7 +43,15 @@ async def show_stocks_list(update: Update, context: CallbackContext, page=1):
         for stock in page_stocks:
             op_emoji = '🟢' if stock.operation_type == 'купівля' else '🔴'
             text += f"📅 {stock.date} | {op_emoji} {stock.operation_type} | {stock.platform}\n"
-            text += f"   📈 {stock.ticker} | {stock.quantity} шт | {stock.total_amount:.2f} $\n\n"
+            text += f"   📈 {stock.ticker} | {stock.quantity} шт | {stock.total_amount:.2f} $\n"
+
+            if stock.operation_type == 'продаж':
+                pnl = stock.pnl or 0
+                pnl_emoji = '📈' if pnl >= 0 else '📉'
+                pnl_sign = '+' if pnl >= 0 else ''
+                text += f"   {pnl_emoji} ПнЛ: {pnl_sign}{pnl:.2f} $\n"
+
+            text += "\n"
 
         keyboard = []
         if total_pages > 1:
