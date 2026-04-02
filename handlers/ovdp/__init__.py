@@ -42,12 +42,6 @@ from .statistics import show_statistics
 # Синхронізація
 from .sync import sync_bonds_from_sheets
 
-# Баланс
-from .balance import (
-    recalculate_bond_percents,
-    handle_balance_platform_selected,
-)
-
 __all__ = [
     # Головне меню
     'show_ovdp_menu',
@@ -82,8 +76,4 @@ __all__ = [
     
     # Синхронізація
     'sync_bonds_from_sheets',
-    
-    # Баланс
-    'recalculate_bond_percents',
-    'handle_balance_platform_selected',
 ]
