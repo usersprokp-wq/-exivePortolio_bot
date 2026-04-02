@@ -60,8 +60,13 @@ async def handle_balance_platform_selected(update: Update, context: CallbackCont
     context.user_data['ovdp_balance_platform'] = platform
     context.user_data['bond_step'] = 'ovdp_balance_amount'
     
+    keyboard = [
+        [InlineKeyboardButton("🔙 Назад", callback_data='ovdp_update_balance')]
+    ]
+    
     await query.edit_message_text(
         f"💵 *Оновлення залишку {platform}*\n\n"
         f"Введіть нову суму залишку:",
+        reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode='Markdown'
     )

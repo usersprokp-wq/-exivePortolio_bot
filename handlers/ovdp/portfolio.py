@@ -37,32 +37,63 @@ async def show_portfolio(update: Update, context: CallbackContext, platform: str
             await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
             return
         
-        # Формуємо текст
-        platform_text = f" ({platform.upper()})" if platform else ""
-        text = f"💼 *Портфель ОВДП{platform_text}*\n\n"
-        
-        total_amount = 0
-        total_qty = 0
+        # Групуємо облігації по номеру
+        bonds_grouped = {}
+        balances = []
+        total_portfolio_amount = 0
         
         for record in portfolio:
             if record.bond_number.endswith('uah'):
                 # Залишки на рахунках
-                text += f"💰 *{record.platform} Залишок*\n"
-                text += f"   💵 {record.total_amount:.2f} грн\n\n"
-                total_amount += record.total_amount
+                balances.append(record)
+                total_portfolio_amount += record.total_amount
             else:
                 # Облігації
-                text += f"🔢 *{record.bond_number}*\n"
-                text += f"   📆 Погашення: {record.maturity_date}\n"
-                text += f"   📦 Кількість: {record.total_quantity} шт\n"
-                text += f"   💰 Середня ціна: {record.avg_price:.2f} грн\n"
-                text += f"   💵 Сума: {record.total_amount:.2f} грн\n"
-                text += f"   🏦 {record.platform}\n"
-                if hasattr(record, 'percent') and record.percent:
-                    text += f"   📊 {record.percent:.1f}% портфеля\n"
-                text += "\n"
-                total_amount += record.total_amount
-                total_qty += record.total_quantity
+                total_portfolio_amount += record.total_amount
+                if record.bond_number not in bonds_grouped:
+                    bonds_grouped[record.bond_number] = {
+                        'maturity_date': record.maturity_date,
+                        'records': []
+                    }
+                bonds_grouped[record.bond_number]['records'].append(record)
+        
+        # Формуємо текст
+        platform_text = f" ({platform.upper()})" if platform else ""
+        text = f"💼 *Портфель ОВДП{platform_text}*\n\n"
+        
+        total_qty = 0
+        total_amount = 0
+        
+        # Виводимо згруповані облігації
+        for bond_number in sorted(bonds_grouped.keys()):
+            bond_data = bonds_grouped[bond_number]
+            records = bond_data['records']
+            
+            # Підрахунки по облігації
+            bond_total_qty = sum(r.total_quantity for r in records)
+            bond_total_amount = sum(r.total_amount for r in records)
+            bond_avg_price = bond_total_amount / bond_total_qty if bond_total_qty > 0 else 0
+            bond_percent = (bond_total_amount / total_portfolio_amount * 100) if total_portfolio_amount > 0 else 0
+            
+            # Платформи де є ця облігація
+            platforms = sorted(set(r.platform for r in records))
+            platforms_text = " | ".join(platforms)
+            
+            text += f"🔢 *{bond_number}* 📊 {bond_percent:.1f}%\n"
+            text += f"   📆 Погашення: {bond_data['maturity_date']}\n"
+            text += f"   📦 Кількість: {bond_total_qty} шт\n"
+            text += f"   💰 Середня ціна: {bond_avg_price:.2f} грн\n"
+            text += f"   💵 Сума: {bond_total_amount:.2f} грн\n"
+            text += f"   🏦 {platforms_text}\n\n"
+            
+            total_qty += bond_total_qty
+            total_amount += bond_total_amount
+        
+        # Виводимо залишки
+        for balance in balances:
+            text += f"💰 *{balance.platform} Залишок*\n"
+            text += f"   💵 {balance.total_amount:.2f} грн\n\n"
+            total_amount += balance.total_amount
         
         text += f"━━━━━━━━━━━━━━━━━━━━━━\n"
         text += f"📊 *Всього:*\n"
@@ -70,17 +101,32 @@ async def show_portfolio(update: Update, context: CallbackContext, platform: str
             text += f"   📦 {total_qty} облігацій\n"
         text += f"   💵 {total_amount:.2f} грн"
         
+        # Динамічні кнопки фільтрації
+        filter_buttons = []
+        
+        if platform:
+            # Якщо є фільтр - показуємо кнопку "Всі"
+            filter_buttons.append(InlineKeyboardButton("🏦 Всі", callback_data='ovdp_portfolio'))
+        
+        # Додаємо кнопки платформ (крім активної)
+        if platform != 'icu':
+            filter_buttons.append(InlineKeyboardButton("🏦 ICU", callback_data='portfolio_icu'))
+        if platform != 'sensbank':
+            filter_buttons.append(InlineKeyboardButton("🏦 SENSBANK", callback_data='portfolio_sensbank'))
+        
         # Кнопки
         keyboard = [
             [InlineKeyboardButton("💹 Взнати PnL", callback_data='pnl_portfolio')],
-            [
-                InlineKeyboardButton("🏦 Всі", callback_data='ovdp_portfolio'),
-                InlineKeyboardButton("🏦 ICU", callback_data='portfolio_icu'),
-                InlineKeyboardButton("🏦 SENSBANK", callback_data='portfolio_sensbank')
-            ],
+        ]
+        
+        # Додаємо кнопки фільтрів якщо вони є
+        if filter_buttons:
+            keyboard.append(filter_buttons)
+        
+        keyboard.extend([
             [InlineKeyboardButton("💵 Оновити залишок", callback_data='ovdp_update_balance')],
             [InlineKeyboardButton("🔙 Назад", callback_data='ovdp')]
-        ]
+        ])
         
         await query.edit_message_text(
             text,
