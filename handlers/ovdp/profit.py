@@ -97,6 +97,7 @@ async def show_profit(update: Update, context: CallbackContext):
 async def write_off_profit(update: Update, context: CallbackContext):
     """Списання прибутку"""
     query = update.callback_query
+    await query.answer()
 
     try:
         Session = context.bot_data.get('Session')
@@ -149,13 +150,17 @@ async def write_off_profit(update: Update, context: CallbackContext):
             [InlineKeyboardButton("🔙 Назад", callback_data='ovdp_profit')]
         ]
 
-        await query.edit_message_text(
-            f"✍️ *Списання прибутку*\n\n"
-            f"💰 Доступно для списання: {unrealized_profit:.2f} грн\n\n"
-            f"Введіть суму для списання:",
-            reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode='Markdown'
-        )
+        try:
+            await query.edit_message_text(
+                f"✍️ *Списання прибутку*\n\n"
+                f"💰 Доступно для списання: {unrealized_profit:.2f} грн\n\n"
+                f"Введіть суму для списання:",
+                reply_markup=InlineKeyboardMarkup(keyboard),
+                parse_mode='Markdown'
+            )
+        except Exception as e:
+            if "Message is not modified" not in str(e):
+                raise
 
     except Exception as e:
         logger.error(f"Error in write_off_profit: {e}")
