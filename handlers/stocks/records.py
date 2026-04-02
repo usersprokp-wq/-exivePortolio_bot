@@ -49,7 +49,7 @@ async def show_stocks_list(update: Update, context: CallbackContext, page=1):
                 pnl = stock.pnl or 0
                 pnl_emoji = '📈' if pnl >= 0 else '📉'
                 pnl_sign = '+' if pnl >= 0 else ''
-                text += f"   {pnl_emoji} ПнЛ: {pnl_sign}{pnl:.2f} $\n"
+                text += f"   {pnl_emoji} PnL: {pnl_sign}{pnl:.2f} $\n"
 
             text += "\n"
 
