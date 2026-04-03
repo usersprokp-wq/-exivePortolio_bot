@@ -54,13 +54,18 @@ async def show_dividends_selection(update: Update, context: CallbackContext):
 async def handle_dividend_ticker(update: Update, context: CallbackContext, ticker: str):
     """Обробка вибору акції для дивідендів"""
     query = update.callback_query
+    back_kb = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data='stock_dividend')]])
     if ticker == 'manual':
         context.user_data['dividend_step'] = 'ticker'
-        await query.edit_message_text("📝 Введіть тікер акції:", parse_mode='Markdown')
+        await query.edit_message_text("📝 Введіть тікер акції:", reply_markup=back_kb, parse_mode='Markdown')
     else:
         context.user_data['dividend_ticker'] = ticker
         context.user_data['dividend_step'] = 'amount'
-        await query.edit_message_text(f"💵 Акція: {ticker}\n\n💰 Введіть суму дивіденду ($):", parse_mode='Markdown')
+        await query.edit_message_text(
+            f"💵 Акція: *{ticker}*\n\n💰 Введіть суму дивіденду ($):",
+            reply_markup=back_kb,
+            parse_mode='Markdown'
+        )
 
 
 async def confirm_dividend(update: Update, context: CallbackContext):
@@ -126,28 +131,30 @@ async def handle_message_dividends(update: Update, context: CallbackContext):
     step = context.user_data.get('dividend_step')
 
     try:
+        back_kb = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data='stock_dividend')]])
+
         if step == 'ticker':
             context.user_data['dividend_ticker'] = user_message.upper()
             context.user_data['dividend_step'] = 'amount'
-            await update.message.reply_text("💰 Введіть суму дивіденду ($):")
+            await update.message.reply_text("💰 Введіть суму дивіденду ($):", reply_markup=back_kb)
 
         elif step == 'amount':
             try:
                 amount = float(user_message)
                 if amount <= 0:
-                    await update.message.reply_text("❌ Сума має бути більше 0\n\n💰 Введіть суму дивіденду ($):")
+                    await update.message.reply_text("❌ Сума має бути більше 0\n\n💰 Введіть суму дивіденду ($):", reply_markup=back_kb)
                     return
                 context.user_data['dividend_amount'] = amount
                 context.user_data['dividend_step'] = 'tax'
-                await update.message.reply_text("🏦 Введіть податок/комісію ($):")
+                await update.message.reply_text("🏦 Введіть податок/комісію ($):", reply_markup=back_kb)
             except ValueError:
-                await update.message.reply_text("❌ Будь ласка, введіть коректне число\n\n💰 Введіть суму дивіденду ($):")
+                await update.message.reply_text("❌ Будь ласка, введіть коректне число\n\n💰 Введіть суму дивіденду ($):", reply_markup=back_kb)
 
         elif step == 'tax':
             try:
                 tax = float(user_message)
                 if tax < 0:
-                    await update.message.reply_text("❌ Податок не може бути негативним\n\n🏦 Введіть податок/комісію ($):")
+                    await update.message.reply_text("❌ Податок не може бути негативним\n\n🏦 Введіть податок/комісію ($):", reply_markup=back_kb)
                     return
 
                 amount = context.user_data['dividend_amount']
