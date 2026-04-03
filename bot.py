@@ -228,7 +228,7 @@ def main():
             r'stocks_sync|stocks_sync_from_sheets|stocks_cal_|'
             r'stock_buy|stock_sell|stock_dividend|sell_stock_|stock_platform_|'
             r'update_balance|balance_platform_|dividend_|'
-            r'portfolio_ff|portfolio_ib|portfolio_all|'
+            r'portfolio_ff|portfolio_ib|portfolio_all|pnl_page_|'
             r'portfolio_page_\d+|portfolio_ff_page_\d+|portfolio_ib_page_\d+'
             r').*$'
         )
