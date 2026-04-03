@@ -114,10 +114,7 @@ async def show_stocks_portfolio(update: Update, context: CallbackContext, platfo
             ])
 
         keyboard.append([InlineKeyboardButton("💵 Оновити залишок", callback_data='update_balance')])
-        keyboard.append([
-            InlineKeyboardButton("💵 Дивіденди", callback_data='stocks_dividends'),
-            InlineKeyboardButton("📈 Взнати PnL", callback_data='stocks_check_pnl')
-        ])
+        keyboard.append([InlineKeyboardButton("📈 Взнати PnL", callback_data='stocks_check_pnl')])
         keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data='stocks')])
 
         try:
