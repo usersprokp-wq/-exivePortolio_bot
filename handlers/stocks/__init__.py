@@ -6,7 +6,8 @@ from telegram.ext import CallbackContext
 from .add import (
     start_stock_add, handle_stock_date_selection, handle_calendar_navigation,
     show_sell_stock_selection, handle_sell_stock_selected, save_stock, handle_message_add,
-    show_dividend_selection_from_add, handle_dividend_manual, handle_dividend_ticker_confirm
+    show_dividend_selection_from_add, handle_dividend_manual, handle_dividend_ticker_confirm,
+    show_date_step
 )
 from .records import show_stocks_list
 from .portfolio import show_stocks_portfolio, show_stocks_pnl, handle_update_balance, handle_balance_platform, handle_message_balance
@@ -55,13 +56,18 @@ async def button_handler_stocks(update: Update, context: CallbackContext):
         await handle_calendar_navigation(update, context)
     elif data == 'stock_buy':
         context.user_data['stock_operation_type'] = 'купівля'
-        context.user_data['stock_step'] = 'ticker'
-        await query.edit_message_text("📈 Введіть тікер акції (наприклад: GAZP):", parse_mode='Markdown')
+        context.user_data['stock_step'] = 'operation_type'
+        await show_date_step(update, context)
     elif data == 'stock_sell':
         context.user_data['stock_operation_type'] = 'продаж'
-        await show_sell_stock_selection(update, context)
+        context.user_data['stock_step'] = 'operation_type'
+        await show_date_step(update, context)
     elif data == 'stock_dividend':
-        await show_dividend_selection_from_add(update, context)
+        context.user_data['stock_operation_type'] = 'дивіденди'
+        context.user_data['stock_step'] = 'operation_type'
+        await show_date_step(update, context)
+    elif data == 'stocks_date_step':
+        await show_date_step(update, context)
     elif data.startswith('sell_stock_'):
         ticker = data.replace('sell_stock_', '')
         await handle_sell_stock_selected(update, context, ticker)

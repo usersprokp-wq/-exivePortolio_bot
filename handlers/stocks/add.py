@@ -10,6 +10,13 @@ from .utils import parse_date, recalculate_percents
 logger = logging.getLogger(__name__)
 
 
+UA_MONTHS = {
+    1: 'Січень', 2: 'Лютий', 3: 'Березень', 4: 'Квітень',
+    5: 'Травень', 6: 'Червень', 7: 'Липень', 8: 'Серпень',
+    9: 'Вересень', 10: 'Жовтень', 11: 'Листопад', 12: 'Грудень'
+}
+
+
 def _back_kb(callback: str) -> InlineKeyboardMarkup:
     """Клавіатура з однією кнопкою Назад"""
     return InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data=callback)]])
@@ -25,21 +32,34 @@ def _operation_keyboard() -> InlineKeyboardMarkup:
     ])
 
 
-async def start_stock_add(update: Update, context: CallbackContext):
-    """Розпочати додавання акції"""
+async def show_date_step(update: Update, context: CallbackContext):
+    """Показати вибір дати після вибору типу операції"""
     query = update.callback_query
-    context.user_data['adding_stock'] = True
-    context.user_data['stock_step'] = 'date'
-
     today = datetime.now()
     keyboard = [
         [InlineKeyboardButton(f"📅 Сьогодні ({today.strftime('%d.%m.%Y')})", callback_data=f'stocks_date_{today.strftime("%d.%m.%Y")}')],
         [InlineKeyboardButton("📅 Вибрати дату", callback_data='stocks_date_calendar')],
-        [InlineKeyboardButton("🔙 Назад", callback_data='stocks')]
+        [InlineKeyboardButton("✏️ Ввести вручну", callback_data='stocks_date_manual')],
+        [InlineKeyboardButton("🔙 Назад", callback_data='stocks_add')]
     ]
+    op = context.user_data.get('stock_operation_type', '')
+    op_label = {'купівля': '🟢 Купівля', 'продаж': '🔴 Продаж', 'дивіденди': '💵 Дивіденди'}.get(op, '')
     await query.edit_message_text(
-        "📊 *Додавання акції*\n\n📅 Виберіть дату операції:",
+        f"📊 *Додавання акції*\n{op_label}\n\n📅 Виберіть дату операції:",
         reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='Markdown'
+    )
+
+
+async def start_stock_add(update: Update, context: CallbackContext):
+    """Розпочати додавання акції"""
+    query = update.callback_query
+    context.user_data['adding_stock'] = True
+    context.user_data['stock_step'] = 'operation_type'
+
+    await query.edit_message_text(
+        "📊 *Додавання акції*\n\n📈 Виберіть тип операції:",
+        reply_markup=_operation_keyboard(),
         parse_mode='Markdown'
     )
 
@@ -49,21 +69,32 @@ async def handle_stock_date_selection(update: Update, context: CallbackContext):
     query = update.callback_query
     date_value = query.data.replace('stocks_date_', '')
 
+    operation_type = context.user_data.get('stock_operation_type', '')
+    op_label = {'купівля': '🟢 Купівля', 'продаж': '🔴 Продаж', 'дивіденди': '💵 Дивіденди'}.get(operation_type, '')
+
     if date_value == 'calendar':
         await show_calendar(update, context)
     elif date_value != 'manual':
         context.user_data['stock_date'] = date_value
-        context.user_data['stock_step'] = 'operation_type'
-        await query.edit_message_text(
-            f"📅 Дата: {date_value}\n\n📈 Виберіть тип операції:",
-            reply_markup=_operation_keyboard(),
-            parse_mode='Markdown'
-        )
+        # Далі роутимо залежно від типу операції
+        if operation_type == 'продаж':
+            context.user_data['stock_step'] = 'sell_price'
+            await show_sell_stock_selection(update, context)
+        elif operation_type == 'дивіденди':
+            context.user_data['stock_step'] = 'dividend_ticker'
+            await show_dividend_selection_from_add(update, context)
+        else:
+            context.user_data['stock_step'] = 'ticker'
+            await query.edit_message_text(
+                f"📅 Дата: {date_value}\n{op_label}\n\n📈 Введіть тікер акції:",
+                reply_markup=_back_kb('stocks_date_step'),
+                parse_mode='Markdown'
+            )
     else:
         context.user_data['stock_step'] = 'date_manual'
         await query.edit_message_text(
             "📅 Введіть дату вручну (у форматі ДД.ММ.РРРР):",
-            reply_markup=_back_kb('stocks_add'),
+            reply_markup=_back_kb('stocks_date_step'),
             parse_mode='Markdown'
         )
 
@@ -86,9 +117,10 @@ async def show_calendar(update: Update, context: CallbackContext):
     )
     start_weekday = first_day.weekday()
 
+    month_label = f"{UA_MONTHS[month]} {year}"
     nav_row = [
         InlineKeyboardButton("◀️", callback_data=f'stocks_cal_prev_{year}_{month}'),
-        InlineKeyboardButton(first_day.strftime('%B %Y'), callback_data='stocks_cal_month'),
+        InlineKeyboardButton(month_label, callback_data='stocks_cal_month'),
         InlineKeyboardButton("▶️", callback_data=f'stocks_cal_next_{year}_{month}')
     ]
     dow_row = [InlineKeyboardButton(d, callback_data='stocks_cal_dow') for d in ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Нд']]
@@ -366,16 +398,33 @@ async def handle_message_add(update: Update, context: CallbackContext):
         try:
             datetime.strptime(user_message, '%d.%m.%Y')
             context.user_data['stock_date'] = user_message
-            context.user_data['stock_step'] = 'operation_type'
-            await update.message.reply_text(
-                f"📅 Дата: {user_message}\n\n📈 Виберіть тип операції:",
-                reply_markup=_operation_keyboard(),
-                parse_mode='Markdown'
-            )
+            operation_type = context.user_data.get('stock_operation_type', '')
+            op_label = {'купівля': '🟢 Купівля', 'продаж': '🔴 Продаж', 'дивіденди': '💵 Дивіденди'}.get(operation_type, '')
+            if operation_type == 'продаж':
+                context.user_data['stock_step'] = 'sell_price'
+                await update.message.reply_text(
+                    f"📅 Дата: {user_message}\n{op_label}\n\nОберіть акцію для продажу:",
+                    parse_mode='Markdown'
+                )
+                # show_sell_stock_selection потребує query, тому просимо юзера натиснути кнопку
+            elif operation_type == 'дивіденди':
+                context.user_data['stock_step'] = 'dividend_ticker'
+                await update.message.reply_text(
+                    f"📅 Дата: {user_message}\n{op_label}\n\n📈 Введіть тікер акції:",
+                    reply_markup=_back_kb('stocks_date_step'),
+                    parse_mode='Markdown'
+                )
+            else:
+                context.user_data['stock_step'] = 'ticker'
+                await update.message.reply_text(
+                    f"📅 Дата: {user_message}\n{op_label}\n\n📈 Введіть тікер акції:",
+                    reply_markup=_back_kb('stocks_date_step'),
+                    parse_mode='Markdown'
+                )
         except ValueError:
             await update.message.reply_text(
                 "❌ Невірний формат дати. Введіть у форматі ДД.ММ.РРРР",
-                reply_markup=_back_kb('stocks_add')
+                reply_markup=_back_kb('stocks_date_step')
             )
 
     elif step == 'dividend_ticker':
