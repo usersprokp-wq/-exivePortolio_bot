@@ -11,11 +11,9 @@ from handlers.deposit.add import (
     handle_deposit_cancel,
 )
 from handlers.deposit.list import show_deposit_list
-from handlers.deposit.stubs import (
-    show_deposit_portfolio,
-    show_deposit_profit,
-    show_deposit_stats,
-)
+from handlers.deposit.portfolio import show_deposit_portfolio, handle_deposit_close
+from handlers.deposit.past import show_deposit_past
+from handlers.deposit.stubs import show_deposit_profit, show_deposit_stats
 
 __all__ = [
     "show_deposit_menu",
@@ -30,6 +28,8 @@ __all__ = [
     "handle_deposit_cancel",
     "show_deposit_list",
     "show_deposit_portfolio",
+    "handle_deposit_close",
+    "show_deposit_past",
     "show_deposit_profit",
     "show_deposit_stats",
 ]

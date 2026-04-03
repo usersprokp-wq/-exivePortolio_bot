@@ -6,18 +6,19 @@ def get_deposit_menu_keyboard() -> InlineKeyboardMarkup:
     """Головне меню розділу Депозит."""
     return InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("➕ Додати запис",  callback_data="deposit_add"),
-            InlineKeyboardButton("📋 Мої записи",    callback_data="deposit_list"),
+            InlineKeyboardButton("➕ Додати запис",      callback_data="deposit_add"),
+            InlineKeyboardButton("📋 Мої записи",        callback_data="deposit_list"),
         ],
         [
-            InlineKeyboardButton("🏦 Портфель",      callback_data="deposit_portfolio"),
-            InlineKeyboardButton("💰 Прибуток",      callback_data="deposit_profit"),
+            InlineKeyboardButton("🏦 Портфель",          callback_data="deposit_portfolio"),
+            InlineKeyboardButton("💰 Прибуток",          callback_data="deposit_profit"),
         ],
         [
-            InlineKeyboardButton("📊 Статистика",    callback_data="deposit_stats"),
+            InlineKeyboardButton("🗂 Минулі депозити",   callback_data="deposit_past"),
+            InlineKeyboardButton("📊 Статистика",        callback_data="deposit_stats"),
         ],
         [
-            InlineKeyboardButton("🔙 Назад",         callback_data="back_to_menu"),
+            InlineKeyboardButton("🔙 Назад",             callback_data="back_to_menu"),
         ],
     ])
 
