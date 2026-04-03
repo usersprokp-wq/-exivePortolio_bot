@@ -143,25 +143,25 @@ def _summary(d: dict) -> str:
     term_value = d.get("term_value", term_days)
     c          = _calc(amount, rate, term_days)
 
-    # Вирівнювання через пробіли — використовуємо моноширний шрифт через <code>
-    # Але Telegram HTML не підтримує таблиці, тому вирівнюємо вручну табуляцією
-    # через однакову довжину міток + жирне значення
-    W = 17  # ширина лівої колонки (символів)
+    # Моноширний шрифт через <code> — всі пробіли однакової ширини,
+    # тому значення справа стоять строго на одній вертикальній лінії.
+    W = 15  # ширина лівої колонки (без емодзі)
 
     def row(icon: str, label: str, value: str) -> str:
-        # Доповнюємо label пробілами до W символів
         pad = W - len(label)
-        return f"{icon} {label}{'·' * max(pad, 1)}  <b>{value}</b>\n"
+        return f"{icon} <code>{label}{' ' * max(pad, 1)}{value}</code>\n"
+
+    tax_label = f"Податок {int(TAX_RATE*100)}%:"
 
     return (
         "📋 <b>Перевірте дані депозиту:</b>\n\n"
-        + row("🏦", "Банк:",        d.get("bank_name", "—"))
-        + row("💵", "Сума:",        f"{amount:,.2f} {s}")
-        + row("💱", "Валюта:",      currency)
-        + row("📈", "Ставка:",      f"{rate}% річних")
-        + row("📅", "Відкриття:",   d.get("start_date", "—"))
-        + row("📅", "Закриття:",    d.get("end_date", "—"))
-        + row("⏳", "Термін:",      _fmt_term(term_days, term_type, term_value))
+        + row("🏦", "Банк:",         d.get("bank_name", "—"))
+        + row("💵", "Сума:",         f"{amount:,.2f} {s}")
+        + row("💱", "Валюта:",       currency)
+        + row("📈", "Ставка:",       f"{rate}% річних")
+        + row("📅", "Відкриття:",    d.get("start_date", "—"))
+        + row("📅", "Закриття:",     d.get("end_date", "—"))
+        + row("⏳", "Термін:",       _fmt_term(term_days, term_type, term_value))
         + "\n"
         + row("📉", "Чиста ставка:", f"{c['net_rate']:.2f}% річних")
         + row("📆", "Чист./місяць:", f"{c['net_per_month']:,.2f} {s}")
@@ -169,7 +169,7 @@ def _summary(d: dict) -> str:
         + row("🏁", "На руки:",      f"{amount + c['net_profit']:,.2f} {s}")
         + "\n"
         + row("📊", "Валов. дохід:", f"{c['gross_profit']:,.2f} {s}")
-        + row("🧾", f"Податок {int(TAX_RATE*100)}%:", f"{c['tax']:,.2f} {s}")
+        + row("🧾", tax_label,       f"{c['tax']:,.2f} {s}")
     )
 
 
