@@ -5,7 +5,7 @@ from datetime import datetime
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import CallbackContext
 
-from models import Stock, StockProfitRecord
+from models import Stock, StockPortfolio, StockProfitRecord
 
 logger = logging.getLogger(__name__)
 
@@ -59,6 +59,10 @@ async def show_stocks_profit(update: Update, context: CallbackContext):
             key=lambda m: datetime.strptime(m, '%m.%Y')
         )
 
+        # --- Активи з портфеля (всі рядки включаючи FFusd, IBusd) ---
+        portfolio_records = session.query(StockPortfolio).all()
+        total_assets = sum(p.total_amount or 0 for p in portfolio_records)
+
         # --- Не списаний прибуток ---
         profit_records = session.query(StockProfitRecord).filter(StockProfitRecord.unrealized_profit > 0).all()
         session.close()
@@ -68,12 +72,21 @@ async def show_stocks_profit(update: Update, context: CallbackContext):
 
         context.user_data['unrealized_profit'] = unrealized_profit
 
+        # --- PnL% до активів ---
+        if total_assets > 0:
+            pnl_percent = (total_combined / total_assets) * 100
+            pnl_emoji = "📈" if pnl_percent >= 0 else "📉"
+            pnl_str = f"{pnl_emoji} PnL до активів: {pnl_percent:+.2f}%\n"
+        else:
+            pnl_str = ""
+
         # --- Формування тексту ---
         text = (
             f"💰 *Управління прибутками акцій*\n\n"
             f"📈 Реалізований прибуток: {total_profit:.2f} $\n"
             f"💵 Дивіденди: {total_dividends:.2f} $\n"
             f"💹 Загальний прибуток: {total_combined:.2f} $\n"
+            f"{pnl_str}"
         )
 
         if sorted_months:
@@ -111,12 +124,16 @@ async def handle_message_profit(update: Update, context: CallbackContext):
         if write_off_amount > unrealized_profit:
             await update.message.reply_text(
                 f"❌ Сума перевищує не списаний прибуток ({unrealized_profit:.2f} $)\n\n"
-                f"💰 Введіть суму для списання:"
+                f"💰 Введіть суму для списання:",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data='stocks_profit')]]),
             )
             return
 
         if write_off_amount <= 0:
-            await update.message.reply_text("❌ Сума має бути більше 0\n\n💰 Введіть суму для списання:")
+            await update.message.reply_text(
+                "❌ Сума має бути більше 0\n\n💰 Введіть суму для списання:",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data='stocks_profit')]]),
+            )
             return
 
         Session = context.bot_data.get('Session')
@@ -147,4 +164,7 @@ async def handle_message_profit(update: Update, context: CallbackContext):
         context.user_data.pop('unrealized_profit', None)
 
     except ValueError:
-        await update.message.reply_text("❌ Будь ласка, введіть коректне число\n\n💰 Введіть суму для списання:")
+        await update.message.reply_text(
+            "❌ Будь ласка, введіть коректне число\n\n💰 Введіть суму для списання:",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data='stocks_profit')]]),
+        )
