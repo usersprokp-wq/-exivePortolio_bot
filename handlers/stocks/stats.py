@@ -63,9 +63,10 @@ def _build_general_stats(stocks, portfolio) -> str:
         for platform, data in sorted(platforms.items()):
             pnl_e = "📈" if data['pnl'] >= 0 else "📉"
             wr = (data['wins'] / data['operations'] * 100) if data['operations'] > 0 else 0
+            pnl_pct = (data['pnl'] * 100 / data['invested']) if data['invested'] > 0 else 0
             text += f"\n*{platform}:*\n"
             text += f"  💼 В портфелі: `{data['invested']:.2f} $`\n"
-            text += f"  {pnl_e} P&L: `{data['pnl']:+.2f} $`\n"
+            text += f"  {pnl_e} P&L: `{data['pnl']:+.2f} $` ({pnl_pct:+.2f}%)\n"
             if data['operations'] > 0:
                 text += f"  🔢 Операцій: `{data['operations']}` | ✅ Win rate: `{wr:.1f}%`\n"
 
