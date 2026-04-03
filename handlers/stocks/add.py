@@ -244,6 +244,30 @@ async def show_dividend_selection_from_add(update: Update, context: CallbackCont
         await query.edit_message_text(f"❌ Помилка: {str(e)}")
 
 
+async def handle_dividend_manual(update: Update, context: CallbackContext):
+    """Обробка кнопки 'Ввести вручну' для дивідендів"""
+    query = update.callback_query
+    context.user_data['stock_step'] = 'dividend_ticker'
+    await query.edit_message_text(
+        "💵 *Дивіденди — введення вручну*\n\n📈 Введіть тікер акції:",
+        reply_markup=_back_kb('stock_dividend'),
+        parse_mode='Markdown'
+    )
+
+
+async def handle_dividend_ticker_confirm(update: Update, context: CallbackContext):
+    """Обробка підтвердження тікера для дивідендів (кнопка)"""
+    query = update.callback_query
+    ticker = query.data.replace('dividend_confirm_ticker_', '')
+    context.user_data['ticker'] = ticker
+    context.user_data['stock_step'] = 'dividend_amount'
+    await query.edit_message_text(
+        f"✅ Тікер: *{ticker}*\n\n💰 Введіть суму дивідендів ($):",
+        reply_markup=_back_kb('stock_dividend'),
+        parse_mode='Markdown'
+    )
+
+
 async def save_stock(update: Update, context: CallbackContext):
     """Зберігає акцію в базу даних та оновлює портфель"""
     try:
@@ -352,6 +376,62 @@ async def handle_message_add(update: Update, context: CallbackContext):
             await update.message.reply_text(
                 "❌ Невірний формат дати. Введіть у форматі ДД.ММ.РРРР",
                 reply_markup=_back_kb('stocks_add')
+            )
+
+    elif step == 'dividend_ticker':
+        entered = user_message.strip().upper()
+        Session = context.bot_data.get('Session')
+        if not Session:
+            await update.message.reply_text("❌ Помилка підключення до бази даних")
+            return
+
+        session = Session()
+        all_tickers = [row[0] for row in session.query(Stock.ticker).distinct().all()]
+        session.close()
+
+        # Точний збіг
+        exact = [t for t in all_tickers if t.upper() == entered]
+        if exact:
+            context.user_data['ticker'] = exact[0]
+            context.user_data['stock_step'] = 'dividend_amount'
+            await update.message.reply_text(
+                f"✅ Тікер: *{exact[0]}*\n\n💰 Введіть суму дивідендів ($):",
+                reply_markup=_back_kb('stock_dividend'),
+                parse_mode='Markdown'
+            )
+            return
+
+        # Схожі через startswith
+        similar = [t for t in all_tickers if t.upper().startswith(entered)]
+
+        if not similar:
+            await update.message.reply_text(
+                f"❌ На жаль, жодної операції з тікером *{entered}* не знайдено.\n\n📈 Введіть тікер акції:",
+                reply_markup=_back_kb('stock_dividend'),
+                parse_mode='Markdown'
+            )
+            return
+
+        if len(similar) == 1:
+            keyboard = InlineKeyboardMarkup([
+                [InlineKeyboardButton(f"✅ Так, {similar[0]}", callback_data=f'dividend_confirm_ticker_{similar[0]}')],
+                [InlineKeyboardButton("✏️ Ввести інший", callback_data='dividend_manual')],
+            ])
+            await update.message.reply_text(
+                f"🔍 Можливо, ви мали на увазі *{similar[0]}*?",
+                reply_markup=keyboard,
+                parse_mode='Markdown'
+            )
+        else:
+            keyboard = [
+                [InlineKeyboardButton(t, callback_data=f'dividend_confirm_ticker_{t}')]
+                for t in similar
+            ]
+            keyboard.append([InlineKeyboardButton("✏️ Ввести інший", callback_data='dividend_manual')])
+            await update.message.reply_text(
+                f"🔍 Знайдено кілька схожих тікерів. Оберіть потрібний:",
+                reply_markup=InlineKeyboardMarkup(keyboard),
+                parse_mode='Markdown'
             )
 
     elif step == 'ticker':
