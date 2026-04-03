@@ -89,7 +89,6 @@ async def show_deposit_past(update: Update, context: CallbackContext, page: int 
 
     for dep in slice_:
         s        = _sign(dep.currency or "UAH")
-        status   = "⚪️ Закрито вручну" if dep.is_active == 0 else "🔴 Завершено"
         term_str = (
             f"{dep.term_value} міс. ({dep.term_days} дн.)"
             if dep.term_type == "months"
@@ -97,13 +96,11 @@ async def show_deposit_past(update: Update, context: CallbackContext, page: int 
         )
 
         lines.append(
-            f"{status}  <b>{dep.bank_name}</b>\n"
+            f"🗂 <b>{dep.bank_name}</b>  {dep.start_date} → {dep.end_date}\n"
             f"<code>"
             f"💵 Сума:        {dep.amount:>11,.2f} {s}\n"
             f"📈 Ставка:      {dep.interest_rate:>10.2f}%\n"
             f"⏳ Термін:      {term_str:>11}\n"
-            f"📅 Відкриття:   {dep.start_date:>11}\n"
-            f"📅 Закриття:    {dep.end_date:>11}\n"
             f"💰 Чистий дохід:{dep.net_profit:>10,.2f} {s}\n"
             f"🏁 На руки:     {dep.amount + (dep.net_profit or 0):>10,.2f} {s}\n"
             f"</code>\n"
