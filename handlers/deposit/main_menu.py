@@ -14,7 +14,6 @@ def get_deposit_menu_keyboard() -> InlineKeyboardMarkup:
             InlineKeyboardButton("💰 Прибуток",          callback_data="deposit_profit"),
         ],
         [
-            InlineKeyboardButton("🗂 Минулі депозити",   callback_data="deposit_past"),
             InlineKeyboardButton("📊 Статистика",        callback_data="deposit_stats"),
         ],
         [
