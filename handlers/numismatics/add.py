@@ -154,16 +154,17 @@ async def handle_num_cancel(update: Update, context: CallbackContext):
 # ── Text message router ───────────────────────────────────────────────────────
 
 STEPS = [
-    ("name",           "2/11 — Введіть <b>номінал</b> монети (напр. <code>2 грн</code>):",                          "nominal"),
-    ("nominal",        "3/11 — Введіть <b>позначення металу</b> (напр. <code>au900</code>, <code>ag925</code>):",   "metal_code"),
-    ("metal_code",     "4/11 — Введіть <b>назву металу</b> (напр. <code>золото</code>, <code>срібло</code>):",      "metal_name"),
-    ("metal_name",     "5/11 — Введіть <b>масу чистого металу</b> у грамах (напр. <code>7.78</code>):",            "metal_weight"),
-    ("metal_weight",   "6/11 — Введіть <b>рік карбування</b> (напр. <code>2023</code>):",                          "mint_year"),
-    ("mint_year",      "7/11 — Введіть <b>тираж</b> у штуках (напр. <code>5000</code>):",                          "mintage"),
-    ("mintage",        "8/11 — Введіть <b>діаметр</b> у мм (напр. <code>38.6</code>):",                            "diameter"),
-    ("diameter",       "9/11 — Введіть <b>ціну 1 шт.</b> у ₴ (напр. <code>12500</code>):",                         "price_per_unit"),
-    ("price_per_unit", "10/11 — Введіть <b>кількість</b> (напр. <code>1</code>):",                                  "quantity"),
-    ("quantity",       "11/11 — Введіть <b>суму доставки</b> у ₴ (або <code>0</code> якщо без доставки):",         "delivery_cost"),
+    # (поточний_крок,  поле_збереження,  питання_наступного_кроку,  наступний_крок)
+    ("nominal",        "nominal",        "3/11 — Введіть <b>позначення металу</b> (напр. <code>au900</code>, <code>ag925</code>):",   "metal_code"),
+    ("metal_code",     "metal_code",     "4/11 — Введіть <b>назву металу</b> (напр. <code>золото</code>, <code>срібло</code>):",      "metal_name"),
+    ("metal_name",     "metal_name",     "5/11 — Введіть <b>масу чистого металу</b> у грамах (напр. <code>7.78</code>):",            "metal_weight"),
+    ("metal_weight",   "metal_weight",   "6/11 — Введіть <b>рік карбування</b> (напр. <code>2023</code>):",                          "mint_year"),
+    ("mint_year",      "mint_year",      "7/11 — Введіть <b>тираж</b> у штуках (напр. <code>5000</code>):",                          "mintage"),
+    ("mintage",        "mintage",        "8/11 — Введіть <b>діаметр</b> у мм (напр. <code>38.6</code>):",                            "diameter"),
+    ("diameter",       "diameter",       "9/11 — Введіть <b>ціну 1 шт.</b> у ₴ (напр. <code>12500</code>):",                         "price_per_unit"),
+    ("price_per_unit", "price_per_unit", "10/11 — Введіть <b>кількість</b> (напр. <code>1</code>):",                                  "quantity"),
+    ("quantity",       "quantity",       "11/11 — Введіть <b>суму доставки</b> у ₴ (або <code>0</code> якщо без доставки):",         "delivery_cost"),
+    ("delivery_cost",  "delivery_cost",  None,                                                                                        None),
 ]
 
 # Поля що мають бути числами (float)
@@ -197,9 +198,8 @@ async def handle_message_numismatics(update: Update, context: CallbackContext):
     if current is None:
         return
 
-    # Визначаємо поточне поле для збереження
-    current_field = current[2]  # key у user_data
-    next_step_idx = STEPS.index(current) + 1
+    # Розпаковуємо: (поточний_крок, поле_збереження, питання_наступного, наступний_крок)
+    _, current_field, next_question, next_step = current
 
     # Валідація числових полів
     if current_field in FLOAT_FIELDS:
@@ -234,7 +234,7 @@ async def handle_message_numismatics(update: Update, context: CallbackContext):
         context.user_data[current_field] = text
 
     # Останній крок — показуємо підтвердження
-    if next_step_idx >= len(STEPS):
+    if next_step is None:
         total, cost = _calc(context.user_data)
         context.user_data["num_step"] = "confirm"
         await update.message.reply_text(
@@ -245,10 +245,9 @@ async def handle_message_numismatics(update: Update, context: CallbackContext):
         return
 
     # Переходимо до наступного кроку
-    next_step = STEPS[next_step_idx]
-    context.user_data["num_step"] = next_step[0]
+    context.user_data["num_step"] = next_step
     await update.message.reply_text(
-        next_step[1],
+        next_question,
         reply_markup=_kb_cancel(),
         parse_mode="HTML",
     )
