@@ -17,7 +17,7 @@ from handlers.stocks import button_handler_stocks, handle_message_stocks
 from handlers.ovdp import (
     # Головне меню
     show_ovdp_menu,
-    
+
     # Додавання
     start_bond_add,
     handle_date_selection,
@@ -26,27 +26,41 @@ from handlers.ovdp import (
     handle_sell_bond_selected,
     handle_message_ovdp,
     save_bond,
-    
+
     # Список
     show_bonds_list,
-    
+
     # Портфель
     show_portfolio,
     update_balance_platform_selection,
     handle_balance_platform_selection,
-    
+
     # Прибутки
     show_profit,
     write_off_profit,
-    
+
     # PnL
     show_pnl_portfolio,
-    
+
     # Статистика
     show_statistics,
-    
+
     # Синхронізація
     sync_bonds_from_sheets,
+)
+
+# Імпортуємо обробники Депозиту
+from handlers.deposit import (
+    show_deposit_menu,
+    start_deposit_add,
+    handle_message_deposit,
+    handle_deposit_currency,
+    handle_deposit_confirm,
+    handle_deposit_cancel,
+    show_deposit_list,
+    show_deposit_portfolio,
+    show_deposit_profit,
+    show_deposit_stats,
 )
 
 
@@ -66,11 +80,11 @@ sheets_manager = None
 def initialize_database():
     """Ініціалізація БД"""
     global Session
-    
+
     if not DATABASE_URL:
         logger.error("DATABASE_URL не знайдено")
         return False
-    
+
     try:
         engine = create_engine(DATABASE_URL)
         Base.metadata.create_all(engine)
@@ -85,7 +99,7 @@ def initialize_database():
 def initialize_sheets():
     """Ініціалізація Google Sheets"""
     global sheets_manager
-    
+
     try:
         sheets_manager = GoogleSheetsManager()
         logger.info("Google Sheets підключено")
@@ -127,9 +141,9 @@ async def handle_platform_buy(update: Update, context: CallbackContext, platform
 
 def register_ovdp_handlers(application: Application):
     """Реєструє всі обробники ОВДП"""
-    
+
     logger.info("Реєструємо обробники ОВДП...")
-    
+
     application.add_handler(CallbackQueryHandler(show_ovdp_menu, pattern='^ovdp$'))
     application.add_handler(CallbackQueryHandler(start_bond_add, pattern='^ovdp_add$'))
     application.add_handler(CallbackQueryHandler(handle_date_selection, pattern='^date_'))
@@ -179,8 +193,39 @@ def register_ovdp_handlers(application: Application):
         sync_bonds_from_sheets,
         pattern='^(sync_ovdp_sheets_to_db|sync_sheets_to_db)$'
     ))
-    
+
     logger.info("✅ Обробники ОВДП зареєстровано!")
+
+
+# ═══════════════════════════════════════════════════════════
+# РЕЄСТРАЦІЯ ОБРОБНИКІВ ДЕПОЗИТУ
+# ═══════════════════════════════════════════════════════════
+
+def register_deposit_handlers(application: Application):
+    """Реєструє всі обробники Депозиту"""
+
+    logger.info("Реєструємо обробники Депозиту...")
+
+    # Головне меню
+    application.add_handler(CallbackQueryHandler(show_deposit_menu,      pattern='^deposit$'))
+
+    # Додати запис — запуск флоу
+    application.add_handler(CallbackQueryHandler(start_deposit_add,      pattern='^deposit_add$'))
+
+    # Вибір валюти (inline кнопки)
+    application.add_handler(CallbackQueryHandler(handle_deposit_currency, pattern='^deposit_currency_'))
+
+    # Підтвердження та скасування
+    application.add_handler(CallbackQueryHandler(handle_deposit_confirm,  pattern='^deposit_add_confirm$'))
+    application.add_handler(CallbackQueryHandler(handle_deposit_cancel,   pattern='^deposit_add_cancel$'))
+
+    # Заглушки інших розділів
+    application.add_handler(CallbackQueryHandler(show_deposit_list,       pattern='^deposit_list$'))
+    application.add_handler(CallbackQueryHandler(show_deposit_portfolio,  pattern='^deposit_portfolio$'))
+    application.add_handler(CallbackQueryHandler(show_deposit_profit,     pattern='^deposit_profit$'))
+    application.add_handler(CallbackQueryHandler(show_deposit_stats,      pattern='^deposit_stats$'))
+
+    logger.info("✅ Обробники Депозиту зареєстровано!")
 
 
 # ═══════════════════════════════════════════════════════════
@@ -189,7 +234,9 @@ def register_ovdp_handlers(application: Application):
 
 async def handle_message_unified(update: Update, context: CallbackContext):
     """Обробка текстових повідомлень для всіх портфелів"""
-    if 'bond_step' in context.user_data or 'profit_step' in context.user_data:
+    if 'deposit_step' in context.user_data:
+        await handle_message_deposit(update, context)
+    elif 'bond_step' in context.user_data or 'profit_step' in context.user_data:
         await handle_message_ovdp(update, context)
     elif 'stock_step' in context.user_data or 'dividend_step' in context.user_data:
         await handle_message_stocks(update, context)
@@ -201,23 +248,26 @@ async def handle_message_unified(update: Update, context: CallbackContext):
 
 def main():
     """Головна функція запуску бота"""
-    
+
     if not initialize_database():
         logger.error("Не вдалося підключитися до БД. Вихід.")
         return
-    
+
     initialize_sheets()
-    
+
     app = Application.builder().token(BOT_TOKEN).build()
     app.post_init = post_init
-    
+
     # 1. Команда /start
     app.add_handler(CommandHandler("start", start))
-    
+
     # 2. ОВДП обробники
     register_ovdp_handlers(app)
-    
-    # 3. Акції — портфель пагінація (додано portfolio_ff, portfolio_ib, portfolio_all, portfolio_page_)
+
+    # 3. Депозит обробники
+    register_deposit_handlers(app)
+
+    # 4. Акції — портфель пагінація
     app.add_handler(CallbackQueryHandler(
         button_handler_stocks,
         pattern=(
@@ -233,8 +283,8 @@ def main():
             r').*$'
         )
     ))
-    
-    # 4. Головне меню та спільні функції
+
+    # 5. Головне меню та спільні функції
     app.add_handler(CallbackQueryHandler(
         button_handler_main,
         pattern=(
@@ -249,10 +299,10 @@ def main():
             r')$'
         )
     ))
-    
-    # 5. Текстові повідомлення
+
+    # 6. Текстові повідомлення
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message_unified))
-    
+
     logger.info("🚀 Бот запущений...")
     app.run_polling()
 
