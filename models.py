@@ -19,16 +19,16 @@ class Bond(Base):
     """Модель для ОВДП (облігацій)"""
     __tablename__ = 'bonds'
     id = Column(Integer, primary_key=True)
-    row_order = Column(Integer, default=0)  # Порядок рядка з Excel для FIFO
+    row_order = Column(Integer, default=0)
     date = Column(String(50))
-    operation_type = Column(String(20))  # 'купівля' або 'продаж'
+    operation_type = Column(String(20))
     bond_number = Column(String(50))
     maturity_date = Column(String(50))
     price_per_unit = Column(Float)
     quantity = Column(Integer)
     total_amount = Column(Float)
     platform = Column(String(100))
-    pnl = Column(Float, default=0)  # PnL (прибуток/збиток) — заповнюється при продажу
+    pnl = Column(Float, default=0)
     created_at = Column(String(50), default=datetime.now().isoformat())
 
 
@@ -36,25 +36,25 @@ class BondPortfolio(Base):
     """Модель для портфеля облігацій (зберігає активні позиції)"""
     __tablename__ = 'bond_portfolio'
     id = Column(Integer, primary_key=True)
-    bond_number = Column(String(50))  # Номер облігації
-    maturity_date = Column(String(50))  # Дата погашення
-    total_quantity = Column(Integer)  # Загальна кількість облігацій
-    total_amount = Column(Float)  # Загальна сума інвестицій
-    avg_price = Column(Float)  # Середня ціна за облігацію
-    platform = Column(String(100))  # Платформа
-    percent = Column(Float, default=0)  # % від загальної суми портфеля
-    last_update = Column(String(50), default=datetime.now().isoformat())  # Коли оновлено
+    bond_number = Column(String(50))
+    maturity_date = Column(String(50))
+    total_quantity = Column(Integer)
+    total_amount = Column(Float)
+    avg_price = Column(Float)
+    platform = Column(String(100))
+    percent = Column(Float, default=0)
+    last_update = Column(String(50), default=datetime.now().isoformat())
 
 
 class ProfitRecord(Base):
     """Таблиця для відслідкування прибутків ОВДП"""
     __tablename__ = 'profit_records'
     id = Column(Integer, primary_key=True)
-    operation_date = Column(String(50))  # Дата операції купівлі/продажу
-    operation_type = Column(String(20))  # 'купівля' або 'продаж'
-    amount = Column(Float)  # Сума операції
-    realized_profit = Column(Float, default=0)  # Реалізований прибуток
-    unrealized_profit = Column(Float, default=0)  # Нереалізований прибуток (для списання)
+    operation_date = Column(String(50))
+    operation_type = Column(String(20))
+    amount = Column(Float)
+    realized_profit = Column(Float, default=0)
+    unrealized_profit = Column(Float, default=0)
     created_at = Column(String(50), default=datetime.now().isoformat())
 
 
@@ -62,16 +62,16 @@ class Stock(Base):
     """Модель для акцій"""
     __tablename__ = 'stocks'
     id = Column(Integer, primary_key=True)
-    row_order = Column(Integer, default=0)  # Порядок рядка для сортування
+    row_order = Column(Integer, default=0)
     date = Column(String(50))
-    operation_type = Column(String(20))  # 'купівля' або 'продаж'
+    operation_type = Column(String(20))
     ticker = Column(String(20))
     name = Column(String(200))
     price_per_unit = Column(Float)
     quantity = Column(Integer)
     total_amount = Column(Float)
     platform = Column(String(100))
-    pnl = Column(Float, default=0)  # PnL (прибуток/збиток) — заповнюється при продажу
+    pnl = Column(Float, default=0)
     created_at = Column(String(50), default=datetime.now().isoformat())
 
 
@@ -79,37 +79,48 @@ class StockPortfolio(Base):
     """Модель для портфеля акцій (зберігає активні позиції)"""
     __tablename__ = 'stock_portfolio'
     id = Column(Integer, primary_key=True)
-    ticker = Column(String(20), unique=True)  # Унікальний тікер
-    total_quantity = Column(Integer)  # Загальна кількість акцій
-    total_amount = Column(Float)  # Загальна сума інвестицій
-    avg_price = Column(Float)  # Середня ціна за акцію
-    platform = Column(String(100))  # Біржа
-    percent = Column(Float, default=0)  # % від загальної суми портфеля
-    last_update = Column(String(50), default=datetime.now().isoformat())  # Коли оновлено
+    ticker = Column(String(20), unique=True)
+    total_quantity = Column(Integer)
+    total_amount = Column(Float)
+    avg_price = Column(Float)
+    platform = Column(String(100))
+    percent = Column(Float, default=0)
+    last_update = Column(String(50), default=datetime.now().isoformat())
 
 
 class StockProfitRecord(Base):
     """Таблиця для відслідкування прибутків акцій"""
     __tablename__ = 'stock_profit_records'
     id = Column(Integer, primary_key=True)
-    operation_date = Column(String(50))  # Дата операції купівлі/продажу
-    operation_type = Column(String(20))  # 'купівля' або 'продаж'
-    amount = Column(Float)  # Сума операції
-    realized_profit = Column(Float, default=0)  # Реалізований прибуток
-    unrealized_profit = Column(Float, default=0)  # Нереалізований прибуток (для списання)
+    operation_date = Column(String(50))
+    operation_type = Column(String(20))
+    amount = Column(Float)
+    realized_profit = Column(Float, default=0)
+    unrealized_profit = Column(Float, default=0)
     created_at = Column(String(50), default=datetime.now().isoformat())
 
 
 class Deposit(Base):
     """Модель для депозитів"""
     __tablename__ = 'deposits'
-    id = Column(Integer, primary_key=True)
-    date = Column(String(50))
-    bank = Column(String(100))
-    amount = Column(Float)
-    interest_rate = Column(Float)  # % річних
-    maturity_date = Column(String(50))
-    created_at = Column(String(50), default=datetime.now().isoformat())
+    id            = Column(Integer, primary_key=True)
+    bank_name     = Column(String(100))          # Назва банку
+    amount        = Column(Float)                # Сума депозиту
+    currency      = Column(String(10))           # UAH / USD / EUR
+    interest_rate = Column(Float)                # Відсоткова ставка, % річних
+    start_date    = Column(String(50))           # Дата відкриття  DD.MM.YYYY
+    end_date      = Column(String(50))           # Дата закриття   DD.MM.YYYY
+    term_days     = Column(Integer)              # Термін у днях
+    term_type     = Column(String(10))           # 'days' або 'months'
+    term_value    = Column(Integer)              # Введене значення (дні або місяці)
+    # Розраховані показники (зберігаємо щоб не перераховувати)
+    gross_profit  = Column(Float)                # Валовий дохід
+    tax_amount    = Column(Float)                # Податок 23%
+    net_profit    = Column(Float)                # Чистий дохід
+    net_per_month = Column(Float)                # Чистий дохід на місяць
+    # Службові
+    is_active     = Column(Integer, default=1)   # 1 = активний, 0 = закритий
+    created_at    = Column(String(50), default=datetime.now().isoformat())
 
 
 class Crypto(Base):
@@ -117,7 +128,7 @@ class Crypto(Base):
     __tablename__ = 'cryptos'
     id = Column(Integer, primary_key=True)
     date = Column(String(50))
-    operation_type = Column(String(20))  # 'купівля' або 'продаж'
+    operation_type = Column(String(20))
     coin_name = Column(String(50))
     quantity = Column(Float)
     price_per_unit = Column(Float)
@@ -131,8 +142,8 @@ class Numismatic(Base):
     __tablename__ = 'numismatics'
     id = Column(Integer, primary_key=True)
     date = Column(String(50))
-    operation_type = Column(String(20))  # 'купівля' або 'продаж'
-    name = Column(String(200))  # Назва монети/предмету
+    operation_type = Column(String(20))
+    name = Column(String(200))
     quantity = Column(Integer)
     price_per_unit = Column(Float)
     total_amount = Column(Float)

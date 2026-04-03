@@ -169,7 +169,7 @@ def register_deposit_handlers(application: Application):
     # Головне меню
     application.add_handler(CallbackQueryHandler(show_deposit_menu,            pattern='^deposit$'))
 
-    # Запуск флоу
+    # Запуск флоу додавання
     application.add_handler(CallbackQueryHandler(start_deposit_add,            pattern='^deposit_add$'))
 
     # Валюта
@@ -184,18 +184,27 @@ def register_deposit_handlers(application: Application):
     # Ігнор-кнопки (заголовки, порожні клітинки)
     application.add_handler(CallbackQueryHandler(lambda u, c: u.callback_query.answer(), pattern='^dep_cal_ignore$'))
 
-    # Конкретна дата обрана (Сьогодні або з календаря)
+    # Дата обрана
     application.add_handler(CallbackQueryHandler(handle_deposit_date_selected, pattern='^dep_date_'))
 
-    # Вибір одиниці терміну: дні / місяці
+    # Вибір одиниці терміну
     application.add_handler(CallbackQueryHandler(handle_deposit_term_type,     pattern='^dep_term_(days|months)$'))
 
-    # Підтвердження та скасування
+    # Підтвердження / скасування
     application.add_handler(CallbackQueryHandler(handle_deposit_confirm,       pattern='^deposit_add_confirm$'))
     application.add_handler(CallbackQueryHandler(handle_deposit_cancel,        pattern='^deposit_add_cancel$'))
 
+    # Мої записи + пагінація
+    application.add_handler(CallbackQueryHandler(
+        lambda u, c: show_deposit_list(u, c, 1),
+        pattern='^deposit_list$'
+    ))
+    application.add_handler(CallbackQueryHandler(
+        lambda u, c: show_deposit_list(u, c, int(u.callback_query.data.replace('deposit_list_page_', ''))),
+        pattern='^deposit_list_page_'
+    ))
+
     # Заглушки
-    application.add_handler(CallbackQueryHandler(show_deposit_list,            pattern='^deposit_list$'))
     application.add_handler(CallbackQueryHandler(show_deposit_portfolio,       pattern='^deposit_portfolio$'))
     application.add_handler(CallbackQueryHandler(show_deposit_profit,          pattern='^deposit_profit$'))
     application.add_handler(CallbackQueryHandler(show_deposit_stats,           pattern='^deposit_stats$'))

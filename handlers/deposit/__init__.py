@@ -10,8 +10,8 @@ from handlers.deposit.add import (
     handle_deposit_confirm,
     handle_deposit_cancel,
 )
+from handlers.deposit.list import show_deposit_list
 from handlers.deposit.stubs import (
-    show_deposit_list,
     show_deposit_portfolio,
     show_deposit_profit,
     show_deposit_stats,

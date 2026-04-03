@@ -386,10 +386,36 @@ async def handle_deposit_confirm(update: Update, context: CallbackContext):
     data = context.user_data.copy()
     context.user_data.clear()
 
-    # TODO: зберегти до БД / Google Sheets
-    # session = context.bot_data['Session']()
-    # deposit = Deposit(user_id=query.from_user.id, **data)
-    # session.add(deposit); session.commit(); session.close()
+    # ── Збереження до БД ──────────────────────────────────────────────────────
+    try:
+        from models import Deposit
+        Session = context.bot_data.get('Session')
+        if Session:
+            c = _calc(data.get('amount', 0), data.get('rate', 0), data.get('term_days', 0))
+            session = Session()
+            deposit = Deposit(
+                bank_name     = data.get('bank_name'),
+                amount        = data.get('amount'),
+                currency      = data.get('currency'),
+                interest_rate = data.get('rate'),
+                start_date    = data.get('start_date'),
+                end_date      = data.get('end_date'),
+                term_days     = data.get('term_days'),
+                term_type     = data.get('term_type', 'days'),
+                term_value    = data.get('term_value', data.get('term_days')),
+                gross_profit  = round(c['gross_profit'], 2),
+                tax_amount    = round(c['tax'], 2),
+                net_profit    = round(c['net_profit'], 2),
+                net_per_month = round(c['net_per_month'], 2),
+                is_active     = 1,
+                created_at    = datetime.now().isoformat(),
+            )
+            session.add(deposit)
+            session.commit()
+            session.close()
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(f"Deposit save error: {e}")
 
     from handlers.deposit.main_menu import get_deposit_menu_keyboard
     await query.edit_message_text(
