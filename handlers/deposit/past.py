@@ -31,7 +31,7 @@ def _kb_past(page: int, total_pages: int) -> InlineKeyboardMarkup:
     keyboard = []
     if nav:
         keyboard.append(nav)
-    keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data="deposit")])
+    keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data="deposit_portfolio")])
     return InlineKeyboardMarkup(keyboard)
 
 
