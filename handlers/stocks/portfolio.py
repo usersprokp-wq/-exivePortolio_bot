@@ -1,6 +1,8 @@
 import logging
 from datetime import datetime
 
+import yfinance as yf
+
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import CallbackContext
 
@@ -10,6 +12,10 @@ from .utils import recalculate_percents
 logger = logging.getLogger(__name__)
 
 PORTFOLIO_PER_PAGE = 5
+
+
+def _back_kb(callback: str) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data=callback)]])
 
 
 async def show_stocks_portfolio(update: Update, context: CallbackContext, platform=None, page=1):
@@ -46,7 +52,6 @@ async def show_stocks_portfolio(update: Update, context: CallbackContext, platfo
                     logger.error(f"Error editing message: {e}")
                 return
             stock_records = sorted(filtered, key=lambda r: r.total_amount, reverse=True)
-            # Залишок тільки активної біржі
             balance_records = [r for r in all_records if r.ticker.lower() == f"{platform.lower()}usd"]
         else:
             stock_records = sorted(
@@ -55,7 +60,6 @@ async def show_stocks_portfolio(update: Update, context: CallbackContext, platfo
             )
             balance_records = [r for r in all_records if r.ticker.endswith('usd')]
 
-        # Пагінація тільки для акцій
         total_stocks = len(stock_records)
         total_pages = max(1, (total_stocks + PORTFOLIO_PER_PAGE - 1) // PORTFOLIO_PER_PAGE)
         page = max(1, min(page, total_pages))
@@ -63,7 +67,6 @@ async def show_stocks_portfolio(update: Update, context: CallbackContext, platfo
         start_idx = (page - 1) * PORTFOLIO_PER_PAGE
         page_stocks = stock_records[start_idx:start_idx + PORTFOLIO_PER_PAGE]
 
-        # Загальна сума: всі акції + залишки поточного фільтру
         total_invested = sum(r.total_amount for r in stock_records) + sum(r.total_amount for r in balance_records)
 
         text = f"💼 *Портфель Акцій*"
@@ -78,7 +81,6 @@ async def show_stocks_portfolio(update: Update, context: CallbackContext, platfo
             text += f"   💰 Ціна: {record.avg_price:.2f} $\n"
             text += f"   💵 Сума: {record.total_amount:.2f} $\n\n"
 
-        # Залишки завжди на кожній сторінці
         if balance_records:
             text += "💵 *Залишки на рахунках:*\n"
             for br in balance_records:
@@ -87,20 +89,15 @@ async def show_stocks_portfolio(update: Update, context: CallbackContext, platfo
 
         text += f"━━━━━━━━━━━━━━━━━━━━\n📊 *Всього інвестовано:* {total_invested:.2f} $"
 
-        # Кнопки пагінації
         keyboard = []
         if total_pages > 1:
             pagination_buttons = []
             for p in range(1, total_pages + 1):
                 label = f"[{p}]" if p == page else str(p)
-                if platform:
-                    cb = f"portfolio_{platform.lower()}_page_{p}"
-                else:
-                    cb = f"portfolio_page_{p}"
+                cb = f"portfolio_{platform.lower()}_page_{p}" if platform else f"portfolio_page_{p}"
                 pagination_buttons.append(InlineKeyboardButton(label, callback_data=cb))
             keyboard.append(pagination_buttons)
 
-        # Кнопки фільтрів
         if platform:
             other = 'IB' if platform == 'FF' else 'FF'
             keyboard.append([
@@ -132,6 +129,80 @@ async def show_stocks_portfolio(update: Update, context: CallbackContext, platfo
 
     except Exception as e:
         await query.edit_message_text(f"❌ Помилка: {str(e)}")
+
+
+async def show_stocks_pnl(update: Update, context: CallbackContext):
+    """Розрахувати та показати PnL для всіх акцій портфеля через yfinance"""
+    query = update.callback_query
+    await query.answer()
+
+    await query.edit_message_text("⏳ Завантажую поточні ціни, зачекайте...")
+
+    try:
+        Session = context.bot_data.get('Session')
+        if not Session:
+            await query.edit_message_text("❌ Помилка підключення до бази даних")
+            return
+
+        session = Session()
+        all_records = session.query(StockPortfolio).all()
+        session.close()
+
+        stock_records = [r for r in all_records if not r.ticker.endswith('usd')]
+
+        if not stock_records:
+            await query.edit_message_text(
+                "📭 Портфель пустий",
+                reply_markup=_back_kb('stocks_portfolio')
+            )
+            return
+
+        text = "📈 *PnL по портфелю*\n\n"
+        total_pnl = 0.0
+        errors = []
+
+        for record in stock_records:
+            ticker_clean = record.ticker.split('.')[0]
+            try:
+                stock = yf.Ticker(ticker_clean)
+                info = stock.info
+                current_price = info.get('regularMarketPrice') or info.get('currentPrice')
+
+                if current_price is None:
+                    errors.append(record.ticker)
+                    continue
+
+                pnl_per_share = current_price - record.avg_price
+                pnl_total = pnl_per_share * record.total_quantity
+                total_pnl += pnl_total
+
+                pnl_emoji = "📈" if pnl_total >= 0 else "📉"
+                sign = "+" if pnl_per_share >= 0 else ""
+
+                text += f"{pnl_emoji} *{record.ticker}* ({record.total_quantity} шт)\n"
+                text += f"   💰 Середня: {record.avg_price:.2f} $ → Зараз: {current_price:.2f} $\n"
+                text += f"   За 1 шт: {sign}{pnl_per_share:.2f} $\n"
+                text += f"   Загальний: {'+' if pnl_total >= 0 else ''}{pnl_total:.2f} $\n\n"
+
+            except Exception as e:
+                logger.error(f"yfinance error for {ticker_clean}: {e}")
+                errors.append(record.ticker)
+
+        if errors:
+            text += f"⚠️ Не вдалося отримати ціну: {', '.join(errors)}\n\n"
+
+        total_emoji = "📈" if total_pnl >= 0 else "📉"
+        text += f"━━━━━━━━━━━━━━━━━━━━\n"
+        text += f"{total_emoji} *Загальний PnL: {'+' if total_pnl >= 0 else ''}{total_pnl:.2f} $*"
+
+        keyboard = [[InlineKeyboardButton("🔄 Оновити", callback_data='stocks_check_pnl')],
+                    [InlineKeyboardButton("🔙 Назад", callback_data='stocks_portfolio')]]
+
+        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+
+    except Exception as e:
+        logger.error(f"Error in show_stocks_pnl: {e}")
+        await query.edit_message_text(f"❌ Помилка: {str(e)}", reply_markup=_back_kb('stocks_portfolio'))
 
 
 async def handle_update_balance(update: Update, context: CallbackContext):
@@ -169,6 +240,7 @@ async def handle_balance_platform(update: Update, context: CallbackContext):
         f"💵 *Залишок {platform}*\n\n"
         f"Поточний залишок: {current_amount:.2f} $\n\n"
         f"Введіть нову суму залишку:",
+        reply_markup=_back_kb('update_balance'),
         parse_mode='Markdown'
     )
 
@@ -179,7 +251,10 @@ async def handle_message_balance(update: Update, context: CallbackContext):
     try:
         amount = float(user_message)
         if amount < 0:
-            await update.message.reply_text("❌ Сума має бути 0 або більше")
+            await update.message.reply_text(
+                "❌ Сума має бути 0 або більше",
+                reply_markup=_back_kb('update_balance')
+            )
             return
 
         Session = context.bot_data.get('Session')
@@ -224,4 +299,7 @@ async def handle_message_balance(update: Update, context: CallbackContext):
         context.user_data.pop('balance_platform', None)
 
     except ValueError:
-        await update.message.reply_text("❌ Будь ласка, введіть коректне число")
+        await update.message.reply_text(
+            "❌ Будь ласка, введіть коректне число",
+            reply_markup=_back_kb('update_balance')
+        )
