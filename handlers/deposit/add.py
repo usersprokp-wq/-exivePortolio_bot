@@ -393,7 +393,7 @@ async def handle_deposit_confirm(update: Update, context: CallbackContext):
 
     from handlers.deposit.main_menu import get_deposit_menu_keyboard
     await query.edit_message_text(
-        f"✅ <b>Депозит збережено!</b>\n\n{_summary(data)}\n\n"
+        "✅ <b>Депозит збережено!</b>\n\n"
         "🏦 <b>Депозити</b> — оберіть дію:",
         reply_markup=get_deposit_menu_keyboard(),
         parse_mode="HTML",
