@@ -80,7 +80,7 @@ def _build_calendar(year: int, month: int, prefix: str) -> InlineKeyboardMarkup:
 
     nav_row = [
         InlineKeyboardButton("◀️", callback_data=f"{prefix}_cal_prev_{year}_{month}"),
-        InlineKeyboardButton(f"{UA_MONTHS[month]} {year}", callback_data="dep_cal_ignore"),
+        InlineKeyboardButton(f"{UA_MONTHS[month]} ({month:02d}) {year}", callback_data="dep_cal_ignore"),
         InlineKeyboardButton("▶️", callback_data=f"{prefix}_cal_next_{year}_{month}"),
     ]
     dow_row = [
