@@ -9,7 +9,7 @@ from .add import (
     show_dividend_selection_from_add
 )
 from .records import show_stocks_list
-from .portfolio import show_stocks_portfolio, handle_update_balance, handle_balance_platform, handle_message_balance
+from .portfolio import show_stocks_portfolio, show_stocks_pnl, handle_update_balance, handle_balance_platform, handle_message_balance
 from .profit import show_stocks_profit, handle_message_profit
 from .stats import show_stocks_stats
 from .dividends import show_dividends_selection, handle_dividend_ticker, confirm_dividend, handle_message_dividends
@@ -127,11 +127,7 @@ async def button_handler_stocks(update: Update, context: CallbackContext):
 
     # --- PnL (в розробці) ---
     elif data == 'stocks_check_pnl':
-        await query.edit_message_text(
-            "🚧 Взнати PnL - в розробці",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data='stocks')]]),
-            parse_mode='Markdown'
-        )
+        await show_stocks_pnl(update, context)
 
     # --- Синхронізація ---
     elif data == 'stocks_sync':
