@@ -137,7 +137,8 @@ def _kb_portfolio(deposits: list, page: int, total_pages: int) -> InlineKeyboard
     if nav:
         keyboard.append(nav)
 
-    keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data="deposit")])
+    keyboard.append([InlineKeyboardButton("🗂 Минулі депозити", callback_data="deposit_past")])
+    keyboard.append([InlineKeyboardButton("🔙 Назад",           callback_data="deposit")])
     return InlineKeyboardMarkup(keyboard)
 
 
