@@ -28,7 +28,7 @@ def _operation_keyboard() -> InlineKeyboardMarkup:
         [InlineKeyboardButton("🟢 Купівля", callback_data='stock_buy')],
         [InlineKeyboardButton("🔴 Продаж", callback_data='stock_sell')],
         [InlineKeyboardButton("💵 Дивіденди", callback_data='stock_dividend')],
-        [InlineKeyboardButton("🔙 Назад", callback_data='stocks_add')],
+        [InlineKeyboardButton("🔙 Назад", callback_data='stocks')],
     ])
 
 
