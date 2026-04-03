@@ -3,13 +3,14 @@ handlers/deposit/add.py
 Покрокове додавання депозиту через context.user_data.
 
 Флоу:
-  1. bank_name   — текст
-  2. amount      — число
-  3. currency    — кнопки UAH / USD / EUR
-  4. rate        — текст (число)
-  5. start_date  — кнопки «Сьогодні» або inline-календар
-  6. term_days   — текст (днів), end_date розраховується автоматично
-  7. confirm     — підтвердження з розрахунками
+  1. bank_name    — текст
+  2. amount       — число
+  3. currency     — кнопки UAH / USD / EUR
+  4. rate         — текст (число)
+  5. start_date   — кнопки «Сьогодні» або inline-календар
+  6. term_type    — кнопки «Дні» або «Місяці»
+  7. term_value   — текст (число), end_date розраховується автоматично
+  8. confirm      — підтвердження з розрахунками
 """
 
 from datetime import datetime, timedelta
@@ -50,6 +51,17 @@ def _kb_start_date() -> InlineKeyboardMarkup:
         [InlineKeyboardButton(f"📅 Сьогодні ({today})", callback_data=f"dep_date_{today}")],
         [InlineKeyboardButton("🗓 Вибрати дату",         callback_data="dep_date_calendar")],
         [InlineKeyboardButton("❌ Скасувати",            callback_data="deposit_add_cancel")],
+    ])
+
+
+def _kb_term_type() -> InlineKeyboardMarkup:
+    """Вибір одиниці терміну: дні або місяці."""
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("📆 Дні",    callback_data="dep_term_days"),
+            InlineKeyboardButton("🗓 Місяці", callback_data="dep_term_months"),
+        ],
+        [InlineKeyboardButton("❌ Скасувати", callback_data="deposit_add_cancel")],
     ])
 
 
@@ -114,31 +126,50 @@ def _sign(currency: str) -> str:
     return {"UAH": "₴", "USD": "$", "EUR": "€"}.get(currency, currency)
 
 
+def _fmt_term(term_days: int, term_type: str, term_value: int) -> str:
+    """Відображення терміну: '90 днів' або '3 місяці (91 дн.)'."""
+    if term_type == "months":
+        return f"{term_value} міс. ({term_days} дн.)"
+    return f"{term_days} дн."
+
+
 def _summary(d: dict) -> str:
-    currency  = d.get("currency", "")
-    s         = _sign(currency)
-    amount    = d.get("amount", 0)
-    rate      = d.get("rate", 0)
-    term_days = d.get("term_days", 0)
-    c         = _calc(amount, rate, term_days)
+    currency   = d.get("currency", "")
+    s          = _sign(currency)
+    amount     = d.get("amount", 0)
+    rate       = d.get("rate", 0)
+    term_days  = d.get("term_days", 0)
+    term_type  = d.get("term_type", "days")
+    term_value = d.get("term_value", term_days)
+    c          = _calc(amount, rate, term_days)
+
+    # Вирівнювання через пробіли — використовуємо моноширний шрифт через <code>
+    # Але Telegram HTML не підтримує таблиці, тому вирівнюємо вручну табуляцією
+    # через однакову довжину міток + жирне значення
+    W = 17  # ширина лівої колонки (символів)
+
+    def row(icon: str, label: str, value: str) -> str:
+        # Доповнюємо label пробілами до W символів
+        pad = W - len(label)
+        return f"{icon} {label}{'·' * max(pad, 1)}  <b>{value}</b>\n"
 
     return (
         "📋 <b>Перевірте дані депозиту:</b>\n\n"
-        f"🏦 Банк:                <b>{d.get('bank_name', '—')}</b>\n"
-        f"💵 Сума:                <b>{amount:,.2f} {s}</b>\n"
-        f"💱 Валюта:              <b>{currency}</b>\n"
-        f"📈 Ставка:              <b>{rate}% річних</b>\n"
-        f"📅 Відкрито:            <b>{d.get('start_date', '—')}</b>\n"
-        f"📅 Закрито:             <b>{d.get('end_date', '—')}</b>\n"
-        f"⏳ Термін:              <b>{term_days} днів</b>\n"
-        f"\n"
-        f"📉 Чиста ставка:        <b>{c['net_rate']:.2f}% річних</b>\n"
-        f"💰 Чистий дохід:        <b>{c['net_profit']:,.2f} {s}</b>\n"
-        f"📆 Чистий/місяць:       <b>{c['net_per_month']:,.2f} {s}</b>\n"
-        f"🏁 На руки (тіло+%):   <b>{amount + c['net_profit']:,.2f} {s}</b>\n"
-        f"\n"
-        f"<i>Податок {int(TAX_RATE*100)}%: {c['tax']:,.2f} {s}  |  "
-        f"Валовий дохід: {c['gross_profit']:,.2f} {s}</i>"
+        + row("🏦", "Банк:",        d.get("bank_name", "—"))
+        + row("💵", "Сума:",        f"{amount:,.2f} {s}")
+        + row("💱", "Валюта:",      currency)
+        + row("📈", "Ставка:",      f"{rate}% річних")
+        + row("📅", "Відкриття:",   d.get("start_date", "—"))
+        + row("📅", "Закриття:",    d.get("end_date", "—"))
+        + row("⏳", "Термін:",      _fmt_term(term_days, term_type, term_value))
+        + "\n"
+        + row("📉", "Чиста ставка:", f"{c['net_rate']:.2f}% річних")
+        + row("📆", "Чист./місяць:", f"{c['net_per_month']:,.2f} {s}")
+        + row("💰", "Чистий дохід:", f"{c['net_profit']:,.2f} {s}")
+        + row("🏁", "На руки:",      f"{amount + c['net_profit']:,.2f} {s}")
+        + "\n"
+        + row("📊", "Валов. дохід:", f"{c['gross_profit']:,.2f} {s}")
+        + row("🧾", f"Податок {int(TAX_RATE*100)}%:", f"{c['tax']:,.2f} {s}")
     )
 
 
@@ -160,7 +191,6 @@ async def start_deposit_add(update: Update, context: CallbackContext):
 # ── Calendar callbacks ────────────────────────────────────────────────────────
 
 async def handle_deposit_calendar_show(update: Update, context: CallbackContext):
-    """Кнопка «Вибрати дату» → показує календар поточного місяця."""
     query = update.callback_query
     await query.answer()
     now = context.user_data.get("dep_calendar_month", datetime.now())
@@ -172,7 +202,6 @@ async def handle_deposit_calendar_show(update: Update, context: CallbackContext)
 
 
 async def handle_deposit_calendar_nav(update: Update, context: CallbackContext):
-    """◀️ / ▶️ навігація по місяцях календаря."""
     query = update.callback_query
     await query.answer()
     data = query.data
@@ -197,16 +226,39 @@ async def handle_deposit_calendar_nav(update: Update, context: CallbackContext):
 
 
 async def handle_deposit_date_selected(update: Update, context: CallbackContext):
-    """dep_date_DD.MM.YYYY — дата відкриття обрана, просимо ввести термін."""
+    """dep_date_DD.MM.YYYY — дата відкриття обрана, питаємо одиницю терміну."""
     query = update.callback_query
     await query.answer()
     date_str = query.data.replace("dep_date_", "")
     context.user_data["start_date"]   = date_str
-    context.user_data["deposit_step"] = "term_days"
+    context.user_data["deposit_step"] = "term_type"
     await query.edit_message_text(
         f"✅ Дата відкриття: <b>{date_str}</b>\n\n"
-        "⏳ Введіть термін депозиту у <b>днях</b>\n"
-        "(напр. <code>30</code>, <code>90</code>, <code>180</code>, <code>365</code>):",
+        "⏳ Вкажіть термін депозиту у:",
+        reply_markup=_kb_term_type(),
+        parse_mode="HTML",
+    )
+
+
+# ── Term type callbacks ───────────────────────────────────────────────────────
+
+async def handle_deposit_term_type(update: Update, context: CallbackContext):
+    """dep_term_days або dep_term_months — вибір одиниці терміну."""
+    query = update.callback_query
+    await query.answer()
+
+    term_type = "days" if query.data == "dep_term_days" else "months"
+    context.user_data["term_type"]    = term_type
+    context.user_data["deposit_step"] = "term_value"
+
+    if term_type == "days":
+        hint = "днях (напр. <code>30</code>, <code>90</code>, <code>180</code>, <code>365</code>)"
+    else:
+        hint = "місяцях (напр. <code>1</code>, <code>3</code>, <code>6</code>, <code>12</code>)"
+
+    await query.edit_message_text(
+        f"✅ Дата відкриття: <b>{context.user_data['start_date']}</b>\n\n"
+        f"⏳ Введіть термін у {hint}:",
         reply_markup=_kb_cancel(),
         parse_mode="HTML",
     )
@@ -279,23 +331,41 @@ async def handle_message_deposit(update: Update, context: CallbackContext):
             parse_mode="HTML",
         )
 
-    # ── term_days ──────────────────────────────────────────────────────────────
-    elif step == "term_days":
+    # ── term_value (дні або місяці) ────────────────────────────────────────────
+    elif step == "term_value":
+        term_type = context.user_data.get("term_type", "days")
         try:
-            term_days = int(text.replace(" ", ""))
-            if term_days <= 0:
+            term_value = int(text.replace(" ", ""))
+            if term_value <= 0:
                 raise ValueError
         except ValueError:
+            unit = "днів" if term_type == "days" else "місяців"
             await update.message.reply_text(
-                "⚠️ Введіть ціле число днів більше 0:",
+                f"⚠️ Введіть ціле число {unit} більше 0:",
                 reply_markup=_kb_cancel(),
             )
             return
 
-        start_dt     = datetime.strptime(context.user_data["start_date"], "%d.%m.%Y")
-        end_dt       = start_dt + timedelta(days=term_days)
+        start_dt = datetime.strptime(context.user_data["start_date"], "%d.%m.%Y")
+
+        if term_type == "days":
+            term_days = term_value
+            end_dt    = start_dt + timedelta(days=term_days)
+        else:
+            # Місяці → точна дата через заміну місяця
+            end_month = start_dt.month + term_value
+            end_year  = start_dt.year + (end_month - 1) // 12
+            end_month = (end_month - 1) % 12 + 1
+            # Обробка кінця місяця (напр. 31 берез. + 1 міс. → 30 квіт.)
+            import calendar
+            max_day   = calendar.monthrange(end_year, end_month)[1]
+            end_day   = min(start_dt.day, max_day)
+            end_dt    = datetime(end_year, end_month, end_day)
+            term_days = (end_dt - start_dt).days
+
         end_date_str = end_dt.strftime("%d.%m.%Y")
 
+        context.user_data["term_value"]   = term_value
         context.user_data["term_days"]    = term_days
         context.user_data["end_date"]     = end_date_str
         context.user_data["deposit_step"] = "confirm"
