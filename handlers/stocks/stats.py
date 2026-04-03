@@ -24,7 +24,7 @@ def _build_general_stats(stocks, portfolio) -> str:
     total_pnl = sum(s.pnl or 0 for s in sells)
     current_portfolio_value = sum(p.total_amount for p in portfolio if not p.ticker.endswith('usd'))
     total_invested = sum(s.total_amount for s in buys)
-    pnl_percent = (total_pnl / total_invested * 100) if total_invested > 0 else 0
+    pnl_percent = (total_pnl * 100 / current_portfolio_value) if current_portfolio_value > 0 else 0
 
     profitable_sells = [s for s in sells if (s.pnl or 0) > 0]
     win_rate = (len(profitable_sells) / len(sells) * 100) if sells else 0
