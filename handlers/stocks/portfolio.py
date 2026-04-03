@@ -180,10 +180,17 @@ def _build_pnl_text(results, errors, page, total_pages):
     text = "📊 *PnL по портфелю* (стор. " + str(page) + "/" + str(total_pages) + ")\n\n"
 
     for r in page_results:
-        pnl_emoji = "📈" if r['pnl_total'] >= 0 else "📉"
-        sign_per = "+" if r['pnl_per'] >= 0 else ""
-        sign_tot = "+" if r['pnl_total'] >= 0 else ""
-        sign_pct = "+" if r['pnl_pct'] >= 0 else ""
+        if r['pnl_total'] >= 0:
+            pnl_emoji = "🟢"
+            sign_per = "+"
+            sign_tot = "+"
+            sign_pct = "+"
+        else:
+            pnl_emoji = "🔴"
+            sign_per = ""
+            sign_tot = ""
+            sign_pct = ""
+
         text += pnl_emoji + " *" + r['ticker'] + "* — " + str(r['qty']) + " шт\n"
         text += "   " + str(round(r['avg'], 2)) + " $ → " + str(round(r['current'], 2)) + " $\n"
         text += "   За 1 шт: " + sign_per + str(round(r['pnl_per'], 2)) + " $\n"
@@ -197,14 +204,14 @@ def _build_pnl_text(results, errors, page, total_pages):
     total_pnl = total_current - total_invested
     total_pct = (total_pnl / total_invested * 100) if total_invested else 0
 
-    total_emoji = "📈" if total_pnl >= 0 else "📉"
     sign_total = "+" if total_pnl >= 0 else ""
     sign_total_pct = "+" if total_pct >= 0 else ""
+    pnl_indicator = "🟢 ▲" if total_pnl >= 0 else "🔴 ▼"
 
     text += "━━━━━━━━━━━━━━━━━━━━\n"
     text += "💰 Всього інвестовано: " + str(round(total_invested, 2)) + " $\n"
     text += "💼 Поточні активи: " + str(round(total_current, 2)) + " $\n"
-    text += total_emoji + " *Поточний PnL: " + sign_total + str(round(total_pnl, 2)) + " $ (" + sign_total_pct + str(round(total_pct, 2)) + "%)*"
+    text += pnl_indicator + " *Поточний PnL: " + sign_total + str(round(total_pnl, 2)) + " $ (" + sign_total_pct + str(round(total_pct, 2)) + "%)*"
 
     return text
 
