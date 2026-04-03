@@ -151,15 +151,21 @@ async def _fetch_pnl_data(session_factory):
             if current_price is None:
                 errors.append(record.ticker)
                 continue
+            invested = record.avg_price * record.total_quantity
+            current_total = current_price * record.total_quantity
             pnl_per_share = current_price - record.avg_price
             pnl_total = pnl_per_share * record.total_quantity
+            pnl_pct = (pnl_per_share / record.avg_price * 100) if record.avg_price else 0
             results.append({
                 'ticker': record.ticker,
                 'qty': record.total_quantity,
                 'avg': record.avg_price,
                 'current': current_price,
+                'invested': invested,
+                'current_total': current_total,
                 'pnl_per': pnl_per_share,
                 'pnl_total': pnl_total,
+                'pnl_pct': pnl_pct,
             })
         except Exception as e:
             logger.error("yfinance error for " + ticker_clean + ": " + str(e))
@@ -168,11 +174,59 @@ async def _fetch_pnl_data(session_factory):
     return results, errors
 
 
-async def show_stocks_pnl(update: Update, context: CallbackContext, page: int = 1):
+def _build_pnl_text(results, errors, page, total_pages):
+    page_results = results[(page - 1) * PNL_PER_PAGE: page * PNL_PER_PAGE]
+
+    text = "📊 *PnL по портфелю* (стор. " + str(page) + "/" + str(total_pages) + ")\n\n"
+
+    for r in page_results:
+        pnl_emoji = "📈" if r['pnl_total'] >= 0 else "📉"
+        sign_per = "+" if r['pnl_per'] >= 0 else ""
+        sign_tot = "+" if r['pnl_total'] >= 0 else ""
+        sign_pct = "+" if r['pnl_pct'] >= 0 else ""
+        text += pnl_emoji + " *" + r['ticker'] + "* — " + str(r['qty']) + " шт\n"
+        text += "   " + str(round(r['avg'], 2)) + " $ → " + str(round(r['current'], 2)) + " $\n"
+        text += "   За 1 шт: " + sign_per + str(round(r['pnl_per'], 2)) + " $\n"
+        text += "   Всього: " + sign_tot + str(round(r['pnl_total'], 2)) + " $ (" + sign_pct + str(round(r['pnl_pct'], 2)) + "%)\n\n"
+
+    if errors:
+        text += "⚠️ Не знайдено: " + ", ".join(errors) + "\n\n"
+
+    total_invested = sum(r['invested'] for r in results)
+    total_current = sum(r['current_total'] for r in results)
+    total_pnl = total_current - total_invested
+    total_pct = (total_pnl / total_invested * 100) if total_invested else 0
+
+    total_emoji = "📈" if total_pnl >= 0 else "📉"
+    sign_total = "+" if total_pnl >= 0 else ""
+    sign_total_pct = "+" if total_pct >= 0 else ""
+
+    text += "━━━━━━━━━━━━━━━━━━━━\n"
+    text += "💰 Всього інвестовано: " + str(round(total_invested, 2)) + " $\n"
+    text += "💼 Поточні активи: " + str(round(total_current, 2)) + " $\n"
+    text += total_emoji + " *Поточний PnL: " + sign_total + str(round(total_pnl, 2)) + " $ (" + sign_total_pct + str(round(total_pct, 2)) + "%)*"
+
+    return text
+
+
+def _build_pnl_keyboard(page, total_pages):
+    keyboard = []
+    if total_pages > 1:
+        keyboard.append([
+            InlineKeyboardButton(
+                "[" + str(p) + "]" if p == page else str(p),
+                callback_data="pnl_page_" + str(p)
+            )
+            for p in range(1, total_pages + 1)
+        ])
+    keyboard.append([InlineKeyboardButton("🔄 Оновити", callback_data='pnl_refresh')])
+    keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data='stocks_portfolio')])
+    return InlineKeyboardMarkup(keyboard)
+
+
+async def show_stocks_pnl(update: Update, context: CallbackContext, page: int = 1, use_cache: bool = True):
     query = update.callback_query
     await query.answer()
-
-    await query.edit_message_text("⏳ Завантажую поточні ціни, зачекайте...")
 
     try:
         Session = context.bot_data.get('Session')
@@ -180,51 +234,27 @@ async def show_stocks_pnl(update: Update, context: CallbackContext, page: int = 
             await query.edit_message_text("❌ Помилка підключення до бази даних")
             return
 
-        results, errors = await _fetch_pnl_data(Session)
+        cached = context.user_data.get('pnl_cache') if use_cache else None
+
+        if cached is None:
+            await query.edit_message_text("⏳ Завантажую поточні ціни, зачекайте...")
+            results, errors = await _fetch_pnl_data(Session)
+            context.user_data['pnl_cache'] = {'results': results, 'errors': errors}
+        else:
+            results = cached['results']
+            errors = cached['errors']
 
         if not results and not errors:
             await query.edit_message_text("📭 Портфель пустий", reply_markup=_back_kb('stocks_portfolio'))
             return
 
-        total_pnl = sum(r['pnl_total'] for r in results)
         total_pages = max(1, (len(results) + PNL_PER_PAGE - 1) // PNL_PER_PAGE)
         page = max(1, min(page, total_pages))
 
-        start = (page - 1) * PNL_PER_PAGE
-        page_results = results[start:start + PNL_PER_PAGE]
+        text = _build_pnl_text(results, errors, page, total_pages)
+        keyboard = _build_pnl_keyboard(page, total_pages)
 
-        text = "📊 *PnL по портфелю* (стор. " + str(page) + "/" + str(total_pages) + ")\n\n"
-
-        for r in page_results:
-            pnl_emoji = "📈" if r['pnl_total'] >= 0 else "📉"
-            sign_per = "+" if r['pnl_per'] >= 0 else ""
-            sign_tot = "+" if r['pnl_total'] >= 0 else ""
-            text += pnl_emoji + " *" + r['ticker'] + "* — " + str(r['qty']) + " шт\n"
-            text += "   " + str(round(r['avg'], 2)) + " $ → " + str(round(r['current'], 2)) + " $\n"
-            text += "   За 1 шт: " + sign_per + str(round(r['pnl_per'], 2)) + " $ | Всього: " + sign_tot + str(round(r['pnl_total'], 2)) + " $\n\n"
-
-        if errors:
-            text += "⚠️ Не знайдено: " + ", ".join(errors) + "\n\n"
-
-        total_emoji = "📈" if total_pnl >= 0 else "📉"
-        sign_total = "+" if total_pnl >= 0 else ""
-        text += "━━━━━━━━━━━━━━━━━━━━\n"
-        text += total_emoji + " *Загальний PnL: " + sign_total + str(round(total_pnl, 2)) + " $*"
-
-        keyboard = []
-        if total_pages > 1:
-            keyboard.append([
-                InlineKeyboardButton(
-                    "[" + str(p) + "]" if p == page else str(p),
-                    callback_data="pnl_page_" + str(p)
-                )
-                for p in range(1, total_pages + 1)
-            ])
-
-        keyboard.append([InlineKeyboardButton("🔄 Оновити", callback_data='stocks_check_pnl')])
-        keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data='stocks_portfolio')])
-
-        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+        await query.edit_message_text(text, reply_markup=keyboard, parse_mode='Markdown')
 
     except Exception as e:
         logger.error("Error in show_stocks_pnl: " + str(e))

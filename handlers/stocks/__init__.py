@@ -127,10 +127,14 @@ async def button_handler_stocks(update: Update, context: CallbackContext):
 
     # --- PnL (в розробці) ---
     elif data == 'stocks_check_pnl':
-        await show_stocks_pnl(update, context)
+        context.user_data.pop('pnl_cache', None)
+        await show_stocks_pnl(update, context, page=1, use_cache=False)
+    elif data == 'pnl_refresh':
+        context.user_data.pop('pnl_cache', None)
+        await show_stocks_pnl(update, context, page=1, use_cache=False)
     elif data.startswith('pnl_page_'):
         page = int(data.replace('pnl_page_', ''))
-        await show_stocks_pnl(update, context, page=page)
+        await show_stocks_pnl(update, context, page=page, use_cache=True)
 
     # --- Синхронізація ---
     elif data == 'stocks_sync':
