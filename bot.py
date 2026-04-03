@@ -241,7 +241,6 @@ def register_deposit_handlers(application: Application):
 # ═══════════════════════════════════════════════════════════
 
 async def handle_message_unified(update: Update, context: CallbackContext):
-    # Прибуток депозитів — списання
     if context.user_data.get('deposit_profit_step') == 'write_off':
         await handle_message_deposit_profit(update, context)
     elif 'deposit_step' in context.user_data:

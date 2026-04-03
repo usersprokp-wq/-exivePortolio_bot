@@ -16,7 +16,7 @@ from handlers.deposit.list import show_deposit_list
 from handlers.deposit.portfolio import show_deposit_portfolio, handle_deposit_close, handle_deposit_send_contract
 from handlers.deposit.past import show_deposit_past
 from handlers.deposit.profit import show_deposit_profit, handle_deposit_write_off, handle_message_deposit_profit
-from handlers.deposit.stubs import show_deposit_stats
+from handlers.deposit.stats import show_deposit_stats
 
 __all__ = [
     "show_deposit_menu",
