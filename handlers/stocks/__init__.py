@@ -121,8 +121,6 @@ async def button_handler_stocks(update: Update, context: CallbackContext):
     # --- Статистика ---
     elif data == 'stocks_stats' or data == 'stocks_stats_general':
         await show_stocks_stats(update, context, tab='stocks_stats_general')
-    elif data == 'stocks_stats_platforms':
-        await show_stocks_stats(update, context, tab='stocks_stats_platforms')
     elif data == 'stocks_stats_top':
         await show_stocks_stats(update, context, tab='stocks_stats_top')
 

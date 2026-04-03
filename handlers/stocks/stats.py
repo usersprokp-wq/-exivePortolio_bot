@@ -11,7 +11,6 @@ logger = logging.getLogger(__name__)
 
 
 def _parse_date(date_str: str):
-    """Парсить дату з формату DD.MM.YYYY"""
     try:
         return datetime.strptime(date_str, '%d.%m.%Y')
     except Exception:
@@ -19,51 +18,32 @@ def _parse_date(date_str: str):
 
 
 def _build_general_stats(stocks, portfolio) -> str:
-    """Загальна статистика портфеля"""
     buys = [s for s in stocks if s.operation_type == 'купівля']
     sells = [s for s in stocks if s.operation_type == 'продаж']
 
-    total_invested = sum(s.total_amount for s in buys)
     total_pnl = sum(s.pnl or 0 for s in sells)
     current_portfolio_value = sum(p.total_amount for p in portfolio if not p.ticker.endswith('usd'))
-    different_stocks = len(set(s.ticker for s in buys))
+    total_invested = sum(s.total_amount for s in buys)
     pnl_percent = (total_pnl / total_invested * 100) if total_invested > 0 else 0
 
-    # Win rate
     profitable_sells = [s for s in sells if (s.pnl or 0) > 0]
     win_rate = (len(profitable_sells) / len(sells) * 100) if sells else 0
-
-    # Середній PnL на операцію
     avg_pnl = (total_pnl / len(sells)) if sells else 0
-
-    # Найбільша угода
-    biggest_deal = max(sells, key=lambda s: s.total_amount, default=None)
 
     pnl_emoji = "📈" if total_pnl >= 0 else "📉"
 
     text = (
         f"📊 *Статистика Акцій — Загальне*\n\n"
         f"💼 *Портфель:*\n"
-        f"💵 Загальна сума інвестицій: `{total_invested:.2f} $`\n"
         f"📈 Поточна вартість: `{current_portfolio_value:.2f} $`\n"
-        f"{pnl_emoji} Загальний P&L: `{total_pnl:+.2f} $` ({pnl_percent:+.2f}%)\n"
-        f"🔢 Різних акцій куплено: `{different_stocks}`\n\n"
+        f"{pnl_emoji} Загальний P&L: `{total_pnl:+.2f} $` ({pnl_percent:+.2f}%)\n\n"
         f"📍 *Операції:*\n"
-        f"🔢 Всього продажів: `{len(sells)}`\n"
         f"✅ Win rate: `{win_rate:.1f}%` ({len(profitable_sells)}/{len(sells)})\n"
         f"📊 Середній P&L/угода: `{avg_pnl:+.2f} $`\n"
     )
 
-    if biggest_deal:
-        text += f"💰 Найбільша угода: `{biggest_deal.ticker}` — `{biggest_deal.total_amount:.2f} $`\n"
-
-    return text
-
-
-def _build_platform_stats(stocks, portfolio) -> str:
-    """Статистика по біржах"""
+    # Блок по біржах
     platforms = {}
-
     for s in stocks:
         if s.operation_type == 'продаж':
             if s.platform not in platforms:
@@ -72,40 +52,44 @@ def _build_platform_stats(stocks, portfolio) -> str:
             platforms[s.platform]['operations'] += 1
             if (s.pnl or 0) > 0:
                 platforms[s.platform]['wins'] += 1
-
     for p in portfolio:
         if not p.ticker.endswith('usd'):
             if p.platform not in platforms:
                 platforms[p.platform] = {'invested': 0, 'pnl': 0, 'operations': 0, 'wins': 0}
             platforms[p.platform]['invested'] += p.total_amount
 
-    if not platforms:
-        return "📊 *Статистика по біржах*\n\n📭 Немає даних"
+    if platforms:
+        text += "\n🏛️ *По Біржах:*\n"
+        for platform, data in sorted(platforms.items()):
+            pnl_e = "📈" if data['pnl'] >= 0 else "📉"
+            wr = (data['wins'] / data['operations'] * 100) if data['operations'] > 0 else 0
+            text += f"\n*{platform}:*\n"
+            text += f"  💼 В портфелі: `{data['invested']:.2f} $`\n"
+            text += f"  {pnl_e} P&L: `{data['pnl']:+.2f} $`\n"
+            if data['operations'] > 0:
+                text += f"  🔢 Операцій: `{data['operations']}` | ✅ Win rate: `{wr:.1f}%`\n"
 
-    text = "🏛️ *Статистика Акцій — По Біржах*\n"
+    # PnL по всіх місяцях — від старих до нових
+    monthly_pnl = defaultdict(float)
+    for s in sells:
+        d = _parse_date(s.date)
+        if d:
+            key = d.strftime('%m.%Y')
+            monthly_pnl[key] += s.pnl or 0
 
-    for platform, data in sorted(platforms.items()):
-        pnl_emoji = "📈" if data['pnl'] >= 0 else "📉"
-        win_rate = (data['wins'] / data['operations'] * 100) if data['operations'] > 0 else 0
-        text += (
-            f"\n*{platform}:*\n"
-            f"  💼 В портфелі: `{data['invested']:.2f} $`\n"
-            f"  {pnl_emoji} P&L: `{data['pnl']:+.2f} $`\n"
-        )
-        if data['operations'] > 0:
-            text += (
-                f"  🔢 Операцій: `{data['operations']}`\n"
-                f"  ✅ Win rate: `{win_rate:.1f}%`\n"
-            )
+    if monthly_pnl:
+        text += "\n📅 *P&L по місяцях:*\n"
+        for month in sorted(monthly_pnl.keys(), key=lambda m: datetime.strptime(m, '%m.%Y')):
+            pnl = monthly_pnl[month]
+            emoji = "📈" if pnl >= 0 else "📉"
+            text += f"  {emoji} `{month}`: `{pnl:+.2f} $`\n"
 
     return text
 
 
 def _build_top_stocks_stats(stocks, portfolio) -> str:
-    """Топ акцій та часова аналітика"""
     sells = [s for s in stocks if s.operation_type == 'продаж']
 
-    # PnL по тікерах
     ticker_pnl = defaultdict(float)
     for s in sells:
         ticker_pnl[s.ticker] += s.pnl or 0
@@ -114,7 +98,6 @@ def _build_top_stocks_stats(stocks, portfolio) -> str:
 
     if ticker_pnl:
         sorted_tickers = sorted(ticker_pnl.items(), key=lambda x: x[1], reverse=True)
-
         best = sorted_tickers[0]
         worst = sorted_tickers[-1]
 
@@ -130,33 +113,15 @@ def _build_top_stocks_stats(stocks, portfolio) -> str:
     else:
         text += "📭 Немає закритих угод для аналізу\n"
 
-    # Топ-3 по вазі в портфелі
     active = [p for p in portfolio if not p.ticker.endswith('usd')]
     total_portfolio = sum(p.total_amount for p in active)
 
     if active and total_portfolio > 0:
         text += "\n💼 *Топ-3 по вазі в портфелі:*\n"
-        sorted_portfolio = sorted(active, key=lambda p: p.total_amount, reverse=True)
-        for i, p in enumerate(sorted_portfolio[:3], 1):
+        for i, p in enumerate(sorted(active, key=lambda p: p.total_amount, reverse=True)[:3], 1):
             weight = p.total_amount / total_portfolio * 100
             text += f"  {i}. `{p.ticker}`: `{weight:.1f}%` ({p.total_amount:.2f} $)\n"
 
-    # PnL по місяцях
-    monthly_pnl = defaultdict(float)
-    for s in sells:
-        d = _parse_date(s.date)
-        if d:
-            key = d.strftime('%m.%Y')
-            monthly_pnl[key] += s.pnl or 0
-
-    if monthly_pnl:
-        text += "\n📅 *P&L по місяцях (останні 6):*\n"
-        for month in sorted(monthly_pnl.keys(), reverse=True)[:6]:
-            pnl = monthly_pnl[month]
-            emoji = "📈" if pnl >= 0 else "📉"
-            text += f"  {emoji} `{month}`: `{pnl:+.2f} $`\n"
-
-    # Середній час утримання
     buy_dates = {}
     hold_days = []
     for s in stocks:
@@ -169,8 +134,7 @@ def _build_top_stocks_stats(stocks, portfolio) -> str:
     for s in sells:
         d = _parse_date(s.date)
         if d and s.ticker in buy_dates and buy_dates[s.ticker]:
-            buy_d = min(buy_dates[s.ticker])
-            days = (d - buy_d).days
+            days = (d - min(buy_dates[s.ticker])).days
             if days >= 0:
                 hold_days.append(days)
 
@@ -182,10 +146,8 @@ def _build_top_stocks_stats(stocks, portfolio) -> str:
 
 
 def _keyboard(current: str) -> InlineKeyboardMarkup:
-    """Клавіатура з вкладками"""
     tabs = [
         ('🌐 Загальне', 'stocks_stats_general'),
-        ('🏛️ Біржі', 'stocks_stats_platforms'),
         ('🏆 Топ акції', 'stocks_stats_top'),
     ]
     row = []
@@ -201,7 +163,6 @@ def _keyboard(current: str) -> InlineKeyboardMarkup:
 
 
 async def show_stocks_stats(update: Update, context: CallbackContext, tab: str = 'stocks_stats_general'):
-    """Показати статистику акцій"""
     query = update.callback_query
     await query.answer()
 
@@ -221,9 +182,7 @@ async def show_stocks_stats(update: Update, context: CallbackContext, tab: str =
             await query.edit_message_text("📭 Немає даних про акції", reply_markup=InlineKeyboardMarkup(keyboard))
             return
 
-        if tab == 'stocks_stats_platforms':
-            text = _build_platform_stats(stocks, portfolio)
-        elif tab == 'stocks_stats_top':
+        if tab == 'stocks_stats_top':
             text = _build_top_stocks_stats(stocks, portfolio)
         else:
             text = _build_general_stats(stocks, portfolio)
