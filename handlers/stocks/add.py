@@ -5,7 +5,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import CallbackContext
 
 from models import Stock, StockPortfolio
-from .utils import parse_date, recalculate_percents
+from ..ovdp.utils import parse_date, recalculate_percents
 
 logger = logging.getLogger(__name__)
 

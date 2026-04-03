@@ -1,4 +1,5 @@
 import logging
+from collections import defaultdict
 from datetime import datetime
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
@@ -28,21 +29,67 @@ async def show_stocks_profit(update: Update, context: CallbackContext):
             await query.edit_message_text("📭 Немає даних про акції")
             return
 
+        # --- Загальні суми ---
         total_profit = sum(s.pnl or 0 for s in stocks if s.operation_type == 'продаж')
+        total_dividends = sum(s.total_amount or 0 for s in stocks if s.operation_type == 'дивіденди')
+        total_combined = total_profit + total_dividends
+
+        # --- Розбивка по місяцях ---
+        # month_data: { 'MM.YYYY': {'profit': X, 'dividends': Y} }
+        month_data = defaultdict(lambda: {'profit': 0.0, 'dividends': 0.0})
+
+        for s in stocks:
+            if s.operation_type not in ('продаж', 'дивіденди'):
+                continue
+            try:
+                # Формат дати: 03.04.2026 -> MM.YYYY
+                dt = datetime.strptime(s.date, '%d.%m.%Y')
+                month_key = dt.strftime('%m.%Y')
+            except (ValueError, TypeError):
+                continue
+
+            if s.operation_type == 'продаж':
+                month_data[month_key]['profit'] += s.pnl or 0
+            elif s.operation_type == 'дивіденди':
+                month_data[month_key]['dividends'] += s.total_amount or 0
+
+        # Сортування від старого до нового
+        sorted_months = sorted(
+            month_data.keys(),
+            key=lambda m: datetime.strptime(m, '%m.%Y')
+        )
+
+        # --- Не списаний прибуток ---
         profit_records = session.query(StockProfitRecord).filter(StockProfitRecord.unrealized_profit > 0).all()
         session.close()
 
         total_written_off = sum(r.unrealized_profit for r in profit_records)
-        unrealized_profit = max(0, total_profit - total_written_off)
+        unrealized_profit = max(0, total_combined - total_written_off)
 
-        # Зберігаємо для перевірки при списанні
         context.user_data['unrealized_profit'] = unrealized_profit
 
+        # --- Формування тексту ---
         text = (
             f"💰 *Управління прибутками акцій*\n\n"
             f"📈 Реалізований прибуток: {total_profit:.2f} $\n"
-            f"📋 Не списаний прибуток: {unrealized_profit:.2f} $\n\n"
+            f"💵 Дивіденди: {total_dividends:.2f} $\n"
+            f"💹 Загальний прибуток: {total_combined:.2f} $\n"
         )
+
+        if sorted_months:
+            text += f"\n📅 *Прибуток по місяцях:*\n"
+            for month_key in sorted_months:
+                data = month_data[month_key]
+                parts = []
+                if data['profit'] != 0:
+                    parts.append(f"📈 {data['profit']:.2f} $")
+                if data['dividends'] != 0:
+                    parts.append(f"💵 {data['dividends']:.2f} $")
+                if parts:
+                    text += f"{month_key} — {' | '.join(parts)}\n"
+
+        text += f"\n📋 Не списаний прибуток: {unrealized_profit:.2f} $\n"
+
         keyboard = [
             [InlineKeyboardButton("✍️ Списати прибуток", callback_data='stocks_write_off_profit')],
             [InlineKeyboardButton("🔙 Назад", callback_data='stocks')]
@@ -50,6 +97,7 @@ async def show_stocks_profit(update: Update, context: CallbackContext):
         await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
 
     except Exception as e:
+        logger.error(f"Error in show_stocks_profit: {e}")
         await query.edit_message_text(f"❌ Помилка: {str(e)}")
 
 
