@@ -98,7 +98,16 @@ def _build_text(deposits: list, page: int, total_pages: int, today: date) -> str
 
 
 def _kb(deposits: list, page: int, total_pages: int) -> InlineKeyboardMarkup:
+    slice_   = deposits[(page - 1) * PAGE_SIZE : page * PAGE_SIZE]
     keyboard = []
+
+    # Кнопки договору для депозитів що мають файл
+    for dep in slice_:
+        if dep.contract_file_id:
+            keyboard.append([InlineKeyboardButton(
+                f"📄 Договір: {dep.bank_name}",
+                callback_data=f"deposit_contract_{dep.id}"
+            )])
 
     # Навігація
     nav = []
@@ -158,6 +167,37 @@ async def show_deposit_portfolio(update: Update, context: CallbackContext, page:
         _build_text(active, page, total_pages, today),
         reply_markup=_kb(active, page, total_pages),
         parse_mode="HTML",
+    )
+
+
+async def handle_deposit_send_contract(update: Update, context: CallbackContext):
+    """Надсилає PDF договору користувачу."""
+    query  = update.callback_query
+    await query.answer()
+    dep_id = int(query.data.replace("deposit_contract_", ""))
+
+    Session = context.bot_data.get('Session')
+    if not Session:
+        await query.answer("❌ Помилка БД", show_alert=True)
+        return
+
+    try:
+        session = Session()
+        dep     = session.query(Deposit).filter(Deposit.id == dep_id).first()
+        session.close()
+    except Exception as e:
+        logger.error(f"Contract send error: {e}")
+        await query.answer("❌ Помилка", show_alert=True)
+        return
+
+    if not dep or not dep.contract_file_id:
+        await query.answer("📄 Договір відсутній", show_alert=True)
+        return
+
+    await context.bot.send_document(
+        chat_id  = query.message.chat_id,
+        document = dep.contract_file_id,
+        caption  = f"📄 Договір депозиту — {dep.bank_name}",
     )
 
 

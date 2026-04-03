@@ -275,11 +275,16 @@ async def handle_deposit_end_selected(update: Update, context: CallbackContext):
     context.user_data["term_days"]    = term_days
     context.user_data["term_type"]    = "days"
     context.user_data["term_value"]   = term_days
-    context.user_data["deposit_step"] = "confirm"
+    context.user_data["deposit_step"] = "contract"
 
     await query.edit_message_text(
-        _summary(context.user_data),
-        reply_markup=_kb_confirm(),
+        f"✅ Дата закриття: <b>{date_str}</b>  •  Термін: <b>{term_days} дн.</b>\n\n"
+        "📄 Завантажте договір депозиту у форматі <b>PDF</b>\n"
+        "або пропустіть цей крок:",
+        reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton("⏭ Пропустити", callback_data="deposit_contract_skip")],
+            [InlineKeyboardButton("❌ Скасувати",  callback_data="deposit_add_cancel")],
+        ]),
         parse_mode="HTML",
     )
 
@@ -300,10 +305,19 @@ async def handle_deposit_currency(update: Update, context: CallbackContext):
     )
 
 
-# ── Text message router ───────────────────────────────────────────────────────
+# ── Text / Document message router ───────────────────────────────────────────
 
 async def handle_message_deposit(update: Update, context: CallbackContext):
     step = context.user_data.get("deposit_step")
+
+    # Крок contract — обробляємо документ
+    if step == "contract":
+        await handle_message_deposit_contract(update, context)
+        return
+
+    # Для решти кроків потрібен текст
+    if not update.message.text:
+        return
     text = update.message.text.strip()
 
     if step == "bank_name":
@@ -349,6 +363,58 @@ async def handle_message_deposit(update: Update, context: CallbackContext):
         )
 
 
+# ── Contract callbacks ────────────────────────────────────────────────────────
+
+async def handle_deposit_contract_skip(update: Update, context: CallbackContext):
+    """Пропустити завантаження договору."""
+    query = update.callback_query
+    await query.answer()
+    context.user_data["contract_file_id"] = None
+    context.user_data["deposit_step"]     = "confirm"
+    await query.edit_message_text(
+        _summary(context.user_data),
+        reply_markup=_kb_confirm(),
+        parse_mode="HTML",
+    )
+
+
+async def handle_message_deposit_contract(update: Update, context: CallbackContext):
+    """Отримує PDF файл договору."""
+    doc = update.message.document
+
+    if not doc:
+        await update.message.reply_text(
+            "⚠️ Надішліть файл у форматі <b>PDF</b> або натисніть «Пропустити»:",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("⏭ Пропустити", callback_data="deposit_contract_skip")],
+                [InlineKeyboardButton("❌ Скасувати",  callback_data="deposit_add_cancel")],
+            ]),
+            parse_mode="HTML",
+        )
+        return
+
+    if doc.mime_type != "application/pdf":
+        await update.message.reply_text(
+            "⚠️ Приймається тільки <b>PDF</b> файл. Спробуйте ще раз або пропустіть:",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("⏭ Пропустити", callback_data="deposit_contract_skip")],
+                [InlineKeyboardButton("❌ Скасувати",  callback_data="deposit_add_cancel")],
+            ]),
+            parse_mode="HTML",
+        )
+        return
+
+    context.user_data["contract_file_id"] = doc.file_id
+    context.user_data["deposit_step"]     = "confirm"
+
+    await update.message.reply_text(
+        f"✅ Договір <b>{doc.file_name}</b> завантажено!\n\n"
+        + _summary(context.user_data),
+        reply_markup=_kb_confirm(),
+        parse_mode="HTML",
+    )
+
+
 # ── Confirm ───────────────────────────────────────────────────────────────────
 
 async def handle_deposit_confirm(update: Update, context: CallbackContext):
@@ -365,21 +431,22 @@ async def handle_deposit_confirm(update: Update, context: CallbackContext):
             c       = _calc(data.get('amount', 0), data.get('rate', 0), data.get('term_days', 0))
             session = Session()
             deposit = Deposit(
-                bank_name     = data.get('bank_name'),
-                amount        = data.get('amount'),
-                currency      = data.get('currency'),
-                interest_rate = data.get('rate'),
-                start_date    = data.get('start_date'),
-                end_date      = data.get('end_date'),
-                term_days     = data.get('term_days'),
-                term_type     = data.get('term_type', 'days'),
-                term_value    = data.get('term_value', data.get('term_days')),
-                gross_profit  = round(c['gross_profit'], 2),
-                tax_amount    = round(c['tax'], 2),
-                net_profit    = round(c['net_profit'], 2),
-                net_per_month = round(c['net_per_month'], 2),
-                is_active     = 1,
-                created_at    = datetime.now().isoformat(),
+                bank_name        = data.get('bank_name'),
+                amount           = data.get('amount'),
+                currency         = data.get('currency'),
+                interest_rate    = data.get('rate'),
+                start_date       = data.get('start_date'),
+                end_date         = data.get('end_date'),
+                term_days        = data.get('term_days'),
+                term_type        = data.get('term_type', 'days'),
+                term_value       = data.get('term_value', data.get('term_days')),
+                gross_profit     = round(c['gross_profit'], 2),
+                tax_amount       = round(c['tax'], 2),
+                net_profit       = round(c['net_profit'], 2),
+                net_per_month    = round(c['net_per_month'], 2),
+                is_active        = 1,
+                contract_file_id = data.get('contract_file_id'),
+                created_at       = datetime.now().isoformat(),
             )
             session.add(deposit)
             session.commit()

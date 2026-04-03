@@ -21,14 +21,23 @@ def _parse_date(s: str) -> date:
     return datetime.strptime(s, "%d.%m.%Y").date()
 
 
-def _kb_past(page: int, total_pages: int) -> InlineKeyboardMarkup:
+def _kb_past(page: int, total_pages: int, deposits_slice: list) -> InlineKeyboardMarkup:
+    keyboard = []
+
+    # Кнопки договору
+    for dep in deposits_slice:
+        if dep.contract_file_id:
+            keyboard.append([InlineKeyboardButton(
+                f"📄 Договір: {dep.bank_name}",
+                callback_data=f"deposit_contract_{dep.id}"
+            )])
+
     nav = []
     if page > 1:
         nav.append(InlineKeyboardButton("◀️", callback_data=f"deposit_past_page_{page - 1}"))
     if page < total_pages:
         nav.append(InlineKeyboardButton("▶️", callback_data=f"deposit_past_page_{page + 1}"))
 
-    keyboard = []
     if nav:
         keyboard.append(nav)
     keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data="deposit_portfolio")])
@@ -120,6 +129,6 @@ async def show_deposit_past(update: Update, context: CallbackContext, page: int 
 
     await query.edit_message_text(
         "\n".join(lines),
-        reply_markup=_kb_past(page, total_pages),
+        reply_markup=_kb_past(page, total_pages, slice_),
         parse_mode="HTML",
     )

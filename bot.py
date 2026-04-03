@@ -42,11 +42,13 @@ from handlers.deposit import (
     handle_deposit_start_selected,
     handle_deposit_end_calendar_show,
     handle_deposit_end_selected,
+    handle_deposit_contract_skip,
     handle_deposit_confirm,
     handle_deposit_cancel,
     show_deposit_list,
     show_deposit_portfolio,
     handle_deposit_close,
+    handle_deposit_send_contract,
     show_deposit_past,
     show_deposit_profit,
     show_deposit_stats,
@@ -169,27 +171,31 @@ def register_deposit_handlers(application: Application):
     logger.info("Реєструємо обробники Депозиту...")
 
     # Головне меню
-    application.add_handler(CallbackQueryHandler(show_deposit_menu,              pattern='^deposit$'))
+    application.add_handler(CallbackQueryHandler(show_deposit_menu,               pattern='^deposit$'))
 
     # Додати запис
-    application.add_handler(CallbackQueryHandler(start_deposit_add,              pattern='^deposit_add$'))
-    application.add_handler(CallbackQueryHandler(handle_deposit_currency,        pattern='^deposit_currency_'))
+    application.add_handler(CallbackQueryHandler(start_deposit_add,               pattern='^deposit_add$'))
+    application.add_handler(CallbackQueryHandler(handle_deposit_currency,         pattern='^deposit_currency_'))
 
     # Дата відкриття
-    application.add_handler(CallbackQueryHandler(handle_deposit_calendar_show,   pattern='^dep_start_calendar$'))
-    application.add_handler(CallbackQueryHandler(handle_deposit_calendar_nav,    pattern='^dep_(start|end)_cal_(prev|next)_'))
-    application.add_handler(CallbackQueryHandler(handle_deposit_start_selected,  pattern='^dep_start_\d'))
+    application.add_handler(CallbackQueryHandler(handle_deposit_calendar_show,    pattern='^dep_start_calendar$'))
+    application.add_handler(CallbackQueryHandler(handle_deposit_calendar_nav,     pattern='^dep_(start|end)_cal_(prev|next)_'))
+    application.add_handler(CallbackQueryHandler(handle_deposit_start_selected,   pattern='^dep_start_\d'))
 
     # Дата закриття
     application.add_handler(CallbackQueryHandler(handle_deposit_end_calendar_show, pattern='^dep_end_calendar$'))
-    application.add_handler(CallbackQueryHandler(handle_deposit_end_selected,    pattern='^dep_end_\d'))
+    application.add_handler(CallbackQueryHandler(handle_deposit_end_selected,     pattern='^dep_end_\d'))
 
     # Ігнор-кнопки календаря
     application.add_handler(CallbackQueryHandler(lambda u, c: u.callback_query.answer(), pattern='^dep_cal_ignore$'))
 
+    # Договір
+    application.add_handler(CallbackQueryHandler(handle_deposit_contract_skip,    pattern='^deposit_contract_skip$'))
+    application.add_handler(CallbackQueryHandler(handle_deposit_send_contract,    pattern='^deposit_contract_\d+$'))
+
     # Підтвердження / скасування
-    application.add_handler(CallbackQueryHandler(handle_deposit_confirm,         pattern='^deposit_add_confirm$'))
-    application.add_handler(CallbackQueryHandler(handle_deposit_cancel,          pattern='^deposit_add_cancel$'))
+    application.add_handler(CallbackQueryHandler(handle_deposit_confirm,          pattern='^deposit_add_confirm$'))
+    application.add_handler(CallbackQueryHandler(handle_deposit_cancel,           pattern='^deposit_add_cancel$'))
 
     # Мої записи + пагінація
     application.add_handler(CallbackQueryHandler(
@@ -210,7 +216,7 @@ def register_deposit_handlers(application: Application):
         lambda u, c: show_deposit_portfolio(u, c, int(u.callback_query.data.replace('deposit_portfolio_page_', ''))),
         pattern='^deposit_portfolio_page_'
     ))
-    application.add_handler(CallbackQueryHandler(handle_deposit_close,           pattern='^deposit_close_'))
+    application.add_handler(CallbackQueryHandler(handle_deposit_close,            pattern='^deposit_close_'))
 
     # Минулі депозити + пагінація
     application.add_handler(CallbackQueryHandler(
@@ -223,14 +229,14 @@ def register_deposit_handlers(application: Application):
     ))
 
     # Заглушки
-    application.add_handler(CallbackQueryHandler(show_deposit_profit,            pattern='^deposit_profit$'))
-    application.add_handler(CallbackQueryHandler(show_deposit_stats,             pattern='^deposit_stats$'))
+    application.add_handler(CallbackQueryHandler(show_deposit_profit,             pattern='^deposit_profit$'))
+    application.add_handler(CallbackQueryHandler(show_deposit_stats,              pattern='^deposit_stats$'))
 
     logger.info("✅ Обробники Депозиту зареєстровано!")
 
 
 # ═══════════════════════════════════════════════════════════
-# ОБРОБКА ТЕКСТОВИХ ПОВІДОМЛЕНЬ
+# ОБРОБКА ПОВІДОМЛЕНЬ (текст + документи)
 # ═══════════════════════════════════════════════════════════
 
 async def handle_message_unified(update: Update, context: CallbackContext):
@@ -292,7 +298,11 @@ def main():
         )
     ))
 
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message_unified))
+    # Текстові повідомлення та документи (PDF договір)
+    app.add_handler(MessageHandler(
+        (filters.TEXT | filters.Document.PDF) & ~filters.COMMAND,
+        handle_message_unified
+    ))
 
     logger.info("🚀 Бот запущений...")
     app.run_polling()

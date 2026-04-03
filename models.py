@@ -119,8 +119,9 @@ class Deposit(Base):
     net_profit    = Column(Float)                # Чистий дохід
     net_per_month = Column(Float)                # Чистий дохід на місяць
     # Службові
-    is_active     = Column(Integer, default=1)   # 1 = активний, 0 = закритий
-    created_at    = Column(String(50), default=datetime.now().isoformat())
+    is_active        = Column(Integer, default=1)   # 1 = активний, 0 = закритий
+    contract_file_id = Column(String(200))           # Telegram file_id PDF договору
+    created_at       = Column(String(50), default=datetime.now().isoformat())
 
 
 class Crypto(Base):
