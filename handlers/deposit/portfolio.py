@@ -87,9 +87,8 @@ def _build_text(deposits: list, page: int, total_pages: int, today: date) -> str
     lines.append("─" * 24)
     for v in by_cur.values():
         lines.append(
-            f"💼 {v['invested']:,.0f} {v['s']}  |  "
-            f"💰 {v['accrued']:,.2f} нарах.  |  "
-            f"🏁 {v['net']:,.2f} {v['s']} очік."
+            f"💼 Всього інвестовано: {v['invested']:,.0f} {v['s']}  |  Кількість: {len(deposits)} шт.\n"
+            f"💰 {v['accrued']:,.2f} нарах.  |  🏁 {v['net']:,.2f} {v['s']} очік."
         )
 
     if total_pages > 1:
