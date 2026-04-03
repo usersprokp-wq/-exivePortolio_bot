@@ -98,15 +98,7 @@ def _build_text(deposits: list, page: int, total_pages: int, today: date) -> str
 
 
 def _kb(deposits: list, page: int, total_pages: int) -> InlineKeyboardMarkup:
-    slice_   = deposits[(page - 1) * PAGE_SIZE : page * PAGE_SIZE]
     keyboard = []
-
-    # Кнопки закриття
-    for dep in slice_:
-        keyboard.append([InlineKeyboardButton(
-            f"🔴 Закрити: {dep.bank_name}",
-            callback_data=f"deposit_close_{dep.id}"
-        )])
 
     # Навігація
     nav = []
