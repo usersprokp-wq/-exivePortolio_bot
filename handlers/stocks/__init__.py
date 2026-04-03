@@ -110,7 +110,7 @@ async def button_handler_stocks(update: Update, context: CallbackContext):
         await show_stocks_profit(update, context)
     elif data == 'stocks_write_off_profit':
         context.user_data['profit_step'] = 'enter_amount'
-        await query.edit_message_text("💰 Введіть суму для списання:", parse_mode='Markdown')
+        await query.edit_message_text("💰 Введіть суму для списання:", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data='stocks_profit')]]), parse_mode='Markdown')
 
     # --- Статистика ---
     elif data == 'stocks_stats':
