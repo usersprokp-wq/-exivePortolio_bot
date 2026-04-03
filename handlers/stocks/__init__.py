@@ -6,7 +6,7 @@ from telegram.ext import CallbackContext
 from .add import (
     start_stock_add, handle_stock_date_selection, handle_calendar_navigation,
     show_sell_stock_selection, handle_sell_stock_selected, save_stock, handle_message_add,
-    show_dividend_selection_from_add
+    show_dividend_selection_from_add, handle_dividend_manual, handle_dividend_ticker_confirm
 )
 from .records import show_stocks_list
 from .portfolio import show_stocks_portfolio, show_stocks_pnl, handle_update_balance, handle_balance_platform, handle_message_balance
@@ -119,6 +119,10 @@ async def button_handler_stocks(update: Update, context: CallbackContext):
     # --- Дивіденди ---
     elif data == 'stocks_dividends':
         await show_dividends_selection(update, context)
+    elif data == 'dividend_manual':
+        await handle_dividend_manual(update, context)
+    elif data.startswith('dividend_confirm_ticker_'):
+        await handle_dividend_ticker_confirm(update, context)
     elif data.startswith('dividend_') and data != 'dividend_confirm':
         ticker = data.replace('dividend_', '')
         await handle_dividend_ticker(update, context, ticker)
