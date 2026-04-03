@@ -39,8 +39,9 @@ from handlers.deposit import (
     handle_deposit_currency,
     handle_deposit_calendar_show,
     handle_deposit_calendar_nav,
-    handle_deposit_date_selected,
-    handle_deposit_term_type,
+    handle_deposit_start_selected,
+    handle_deposit_end_calendar_show,
+    handle_deposit_end_selected,
     handle_deposit_confirm,
     handle_deposit_cancel,
     show_deposit_list,
@@ -60,7 +61,7 @@ logger = logging.getLogger(__name__)
 BOT_TOKEN    = os.getenv('BOT_TOKEN')
 DATABASE_URL = os.getenv('DATABASE_URL')
 
-Session       = None
+Session        = None
 sheets_manager = None
 
 
@@ -143,11 +144,11 @@ def register_ovdp_handlers(application: Application):
         lambda u, c: show_bonds_list(u, c, int(u.callback_query.data.replace('bonds_list_page_', ''))),
         pattern='^bonds_list_page_'
     ))
-    application.add_handler(CallbackQueryHandler(lambda u, c: show_portfolio(u, c),           pattern='^ovdp_portfolio$'))
-    application.add_handler(CallbackQueryHandler(lambda u, c: show_portfolio(u, c, 'ICU'),    pattern='^portfolio_icu$'))
+    application.add_handler(CallbackQueryHandler(lambda u, c: show_portfolio(u, c),             pattern='^ovdp_portfolio$'))
+    application.add_handler(CallbackQueryHandler(lambda u, c: show_portfolio(u, c, 'ICU'),      pattern='^portfolio_icu$'))
     application.add_handler(CallbackQueryHandler(lambda u, c: show_portfolio(u, c, 'SENSBANK'), pattern='^portfolio_sensbank$'))
-    application.add_handler(CallbackQueryHandler(update_balance_platform_selection,           pattern='^ovdp_update_balance$'))
-    application.add_handler(CallbackQueryHandler(handle_balance_platform_selection,           pattern='^ovdp_balance_platform_'))
+    application.add_handler(CallbackQueryHandler(update_balance_platform_selection,             pattern='^ovdp_update_balance$'))
+    application.add_handler(CallbackQueryHandler(handle_balance_platform_selection,             pattern='^ovdp_balance_platform_'))
     application.add_handler(CallbackQueryHandler(show_profit,        pattern='^ovdp_profit$'))
     application.add_handler(CallbackQueryHandler(write_off_profit,   pattern='^write_off_profit$'))
     application.add_handler(CallbackQueryHandler(write_off_profit,   pattern='^confirm_write_off$'))
@@ -168,18 +169,27 @@ def register_deposit_handlers(application: Application):
     logger.info("Реєструємо обробники Депозиту...")
 
     # Головне меню
-    application.add_handler(CallbackQueryHandler(show_deposit_menu,            pattern='^deposit$'))
+    application.add_handler(CallbackQueryHandler(show_deposit_menu,              pattern='^deposit$'))
 
     # Додати запис
-    application.add_handler(CallbackQueryHandler(start_deposit_add,            pattern='^deposit_add$'))
-    application.add_handler(CallbackQueryHandler(handle_deposit_currency,      pattern='^deposit_currency_'))
-    application.add_handler(CallbackQueryHandler(handle_deposit_calendar_show, pattern='^dep_date_calendar$'))
-    application.add_handler(CallbackQueryHandler(handle_deposit_calendar_nav,  pattern='^dep_cal_(prev|next)_'))
+    application.add_handler(CallbackQueryHandler(start_deposit_add,              pattern='^deposit_add$'))
+    application.add_handler(CallbackQueryHandler(handle_deposit_currency,        pattern='^deposit_currency_'))
+
+    # Дата відкриття
+    application.add_handler(CallbackQueryHandler(handle_deposit_calendar_show,   pattern='^dep_start_calendar$'))
+    application.add_handler(CallbackQueryHandler(handle_deposit_calendar_nav,    pattern='^dep_(start|end)_cal_(prev|next)_'))
+    application.add_handler(CallbackQueryHandler(handle_deposit_start_selected,  pattern='^dep_start_\d'))
+
+    # Дата закриття
+    application.add_handler(CallbackQueryHandler(handle_deposit_end_calendar_show, pattern='^dep_end_calendar$'))
+    application.add_handler(CallbackQueryHandler(handle_deposit_end_selected,    pattern='^dep_end_\d'))
+
+    # Ігнор-кнопки календаря
     application.add_handler(CallbackQueryHandler(lambda u, c: u.callback_query.answer(), pattern='^dep_cal_ignore$'))
-    application.add_handler(CallbackQueryHandler(handle_deposit_date_selected, pattern='^dep_date_'))
-    application.add_handler(CallbackQueryHandler(handle_deposit_term_type,     pattern='^dep_term_(days|months)$'))
-    application.add_handler(CallbackQueryHandler(handle_deposit_confirm,       pattern='^deposit_add_confirm$'))
-    application.add_handler(CallbackQueryHandler(handle_deposit_cancel,        pattern='^deposit_add_cancel$'))
+
+    # Підтвердження / скасування
+    application.add_handler(CallbackQueryHandler(handle_deposit_confirm,         pattern='^deposit_add_confirm$'))
+    application.add_handler(CallbackQueryHandler(handle_deposit_cancel,          pattern='^deposit_add_cancel$'))
 
     # Мої записи + пагінація
     application.add_handler(CallbackQueryHandler(
@@ -200,7 +210,7 @@ def register_deposit_handlers(application: Application):
         lambda u, c: show_deposit_portfolio(u, c, int(u.callback_query.data.replace('deposit_portfolio_page_', ''))),
         pattern='^deposit_portfolio_page_'
     ))
-    application.add_handler(CallbackQueryHandler(handle_deposit_close, pattern='^deposit_close_'))
+    application.add_handler(CallbackQueryHandler(handle_deposit_close,           pattern='^deposit_close_'))
 
     # Минулі депозити + пагінація
     application.add_handler(CallbackQueryHandler(
@@ -213,8 +223,8 @@ def register_deposit_handlers(application: Application):
     ))
 
     # Заглушки
-    application.add_handler(CallbackQueryHandler(show_deposit_profit, pattern='^deposit_profit$'))
-    application.add_handler(CallbackQueryHandler(show_deposit_stats,  pattern='^deposit_stats$'))
+    application.add_handler(CallbackQueryHandler(show_deposit_profit,            pattern='^deposit_profit$'))
+    application.add_handler(CallbackQueryHandler(show_deposit_stats,             pattern='^deposit_stats$'))
 
     logger.info("✅ Обробники Депозиту зареєстровано!")
 
