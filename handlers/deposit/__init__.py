@@ -6,6 +6,7 @@ from handlers.deposit.add import (
     handle_deposit_calendar_show,
     handle_deposit_calendar_nav,
     handle_deposit_date_selected,
+    handle_deposit_term_type,
     handle_deposit_confirm,
     handle_deposit_cancel,
 )
@@ -24,6 +25,7 @@ __all__ = [
     "handle_deposit_calendar_show",
     "handle_deposit_calendar_nav",
     "handle_deposit_date_selected",
+    "handle_deposit_term_type",
     "handle_deposit_confirm",
     "handle_deposit_cancel",
     "show_deposit_list",
