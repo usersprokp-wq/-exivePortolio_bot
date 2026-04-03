@@ -39,7 +39,6 @@ async def show_date_step(update: Update, context: CallbackContext):
     keyboard = [
         [InlineKeyboardButton(f"📅 Сьогодні ({today.strftime('%d.%m.%Y')})", callback_data=f'stocks_date_{today.strftime("%d.%m.%Y")}')],
         [InlineKeyboardButton("📅 Вибрати дату", callback_data='stocks_date_calendar')],
-        [InlineKeyboardButton("✏️ Ввести вручну", callback_data='stocks_date_manual')],
         [InlineKeyboardButton("🔙 Назад", callback_data='stocks_add')]
     ]
     op = context.user_data.get('stock_operation_type', '')
@@ -74,7 +73,7 @@ async def handle_stock_date_selection(update: Update, context: CallbackContext):
 
     if date_value == 'calendar':
         await show_calendar(update, context)
-    elif date_value != 'manual':
+    else:
         context.user_data['stock_date'] = date_value
         # Далі роутимо залежно від типу операції
         if operation_type == 'продаж':
@@ -90,13 +89,6 @@ async def handle_stock_date_selection(update: Update, context: CallbackContext):
                 reply_markup=_back_kb('stocks_date_step'),
                 parse_mode='Markdown'
             )
-    else:
-        context.user_data['stock_step'] = 'date_manual'
-        await query.edit_message_text(
-            "📅 Введіть дату вручну (у форматі ДД.ММ.РРРР):",
-            reply_markup=_back_kb('stocks_date_step'),
-            parse_mode='Markdown'
-        )
 
 
 async def show_calendar(update: Update, context: CallbackContext):
