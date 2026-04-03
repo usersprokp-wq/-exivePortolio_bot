@@ -119,8 +119,12 @@ async def button_handler_stocks(update: Update, context: CallbackContext):
         await query.edit_message_text("💰 Введіть суму для списання:", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data='stocks_profit')]]), parse_mode='Markdown')
 
     # --- Статистика ---
-    elif data == 'stocks_stats':
-        await show_stocks_stats(update, context)
+    elif data == 'stocks_stats' or data == 'stocks_stats_general':
+        await show_stocks_stats(update, context, tab='stocks_stats_general')
+    elif data == 'stocks_stats_platforms':
+        await show_stocks_stats(update, context, tab='stocks_stats_platforms')
+    elif data == 'stocks_stats_top':
+        await show_stocks_stats(update, context, tab='stocks_stats_top')
 
     # --- Дивіденди ---
     elif data == 'stocks_dividends':
