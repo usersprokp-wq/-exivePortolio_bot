@@ -151,12 +151,20 @@ class Crypto(Base):
 class Numismatic(Base):
     """Модель для нумізматики"""
     __tablename__ = 'numismatics'
-    id             = Column(Integer, primary_key=True)
-    name           = Column(String(200))          # Назва монети
-    year           = Column(Integer)              # Рік випуску
-    quantity       = Column(Integer)              # Кількість
-    currency       = Column(String(10))           # UAH / USD / EUR
-    buy_price      = Column(Float)                # Ціна купівлі за 1 шт.
-    sell_price     = Column(Float)                # Ціна продажу за 1 шт. (None якщо не продана)
-    is_sold        = Column(Integer, default=0)   # 0 = активна, 1 = продана
-    created_at     = Column(String(50), default=datetime.now().isoformat())
+    id               = Column(Integer, primary_key=True)
+    name             = Column(String(200))   # Назва монети
+    nominal          = Column(String(50))    # Номінал (напр. 2 грн)
+    metal_code       = Column(String(50))    # Позначення металу (au900, ag925...)
+    metal_name       = Column(String(100))   # Назва металу (золото, срібло...)
+    metal_weight     = Column(Float)         # Маса чистого металу, г
+    mint_year        = Column(Integer)       # Рік карбування
+    mintage          = Column(Integer)       # Тираж, шт.
+    diameter         = Column(Float)         # Діаметр, мм
+    price_per_unit   = Column(Float)         # Ціна 1 шт., ₴
+    quantity         = Column(Integer)       # Кількість
+    delivery_cost    = Column(Float)         # Сума доставки, ₴
+    total_amount     = Column(Float)         # Загальна сума (ціна*кількість + доставка)
+    cost_per_unit    = Column(Float)         # Собівартість 1 шт. (total / кількість)
+    sell_price       = Column(Float)         # Ціна продажу за 1 шт.
+    is_sold          = Column(Integer, default=0)  # 0 = активна, 1 = продана
+    created_at       = Column(String(50), default=datetime.now().isoformat())

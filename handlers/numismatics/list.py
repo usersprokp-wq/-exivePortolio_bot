@@ -6,18 +6,13 @@ import logging
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import CallbackContext
 
-from models import Numismatic as Coin
+from models import Numismatic
 
 logger = logging.getLogger(__name__)
-
 PAGE_SIZE = 5
 
 
-def _sign(currency: str) -> str:
-    return {"UAH": "₴", "USD": "$", "EUR": "€"}.get(currency, currency)
-
-
-def _status(coin: Coin) -> str:
+def _status(coin: Numismatic) -> str:
     return "✅" if coin.is_sold else "🟢"
 
 
@@ -27,7 +22,6 @@ def _kb_list(page: int, total_pages: int) -> InlineKeyboardMarkup:
         nav.append(InlineKeyboardButton("◀️", callback_data=f"num_list_page_{page - 1}"))
     if page < total_pages:
         nav.append(InlineKeyboardButton("▶️", callback_data=f"num_list_page_{page + 1}"))
-
     keyboard = []
     if nav:
         keyboard.append(nav)
@@ -45,8 +39,8 @@ async def show_num_list(update: Update, context: CallbackContext, page: int = 1)
         return
 
     try:
-        session = Session()
-        all_coins = session.query(Coin).order_by(Coin.id.desc()).all()
+        session   = Session()
+        all_coins = session.query(Numismatic).order_by(Numismatic.id.desc()).all()
         session.close()
     except Exception as e:
         logger.error(f"Coin list error: {e}")
@@ -68,19 +62,19 @@ async def show_num_list(update: Update, context: CallbackContext, page: int = 1)
     page        = max(1, min(page, total_pages))
     slice_      = all_coins[(page - 1) * PAGE_SIZE: page * PAGE_SIZE]
 
-    lines = [f"📋 <b>Мої записи</b>  <i>({total} шт.)</i>\n"]
+    lines = [f"📋 <b>Мої записи</b>  <i>({total} поз.)</i>\n"]
     for coin in slice_:
-        s      = _sign(coin.currency or "UAH")
-        stat   = _status(coin)
-        total_invested = (coin.buy_price or 0) * (coin.quantity or 1)
+        stat = _status(coin)
         line = (
-            f"{stat} <b>{coin.name}</b>  •  {coin.year or '—'} р.\n"
-            f"   🔢 {coin.quantity} шт.  •  💵 {coin.buy_price:,.2f} {s}/шт.\n"
-            f"   💼 Вкладено: <b>{total_invested:,.2f} {s}</b>\n"
+            f"{stat} <b>{coin.name}</b>  •  {coin.mint_year or '—'} р.\n"
+            f"   💲 {coin.nominal or '—'}  •  {coin.metal_name or '—'} ({coin.metal_code or '—'})\n"
+            f"   ⚖️ {coin.metal_weight or 0} г  •  📐 {coin.diameter or 0} мм  •  🔢 {coin.mintage or 0:,} шт. тираж\n"
+            f"   🛒 {coin.quantity} шт.  •  💵 {coin.price_per_unit or 0:,.2f} ₴/шт.\n"
+            f"   💼 Собів.: <b>{coin.cost_per_unit or 0:,.2f} ₴/шт.</b>  •  Разом: <b>{coin.total_amount or 0:,.2f} ₴</b>\n"
         )
         if coin.is_sold and coin.sell_price:
-            profit = (coin.sell_price - coin.buy_price) * coin.quantity
-            line += f"   💰 Продано: {coin.sell_price:,.2f} {s}/шт.  •  P&L: <b>{profit:+,.2f} {s}</b>\n"
+            profit = (coin.sell_price - (coin.cost_per_unit or 0)) * (coin.quantity or 1)
+            line += f"   💰 Продано: {coin.sell_price:,.2f} ₴/шт.  •  P&L: <b>{profit:+,.2f} ₴</b>\n"
         lines.append(line)
 
     lines.append(f"\n<i>Сторінка {page}/{total_pages}</i>")

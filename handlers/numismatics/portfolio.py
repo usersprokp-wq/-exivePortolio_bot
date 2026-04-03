@@ -6,47 +6,39 @@ import logging
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import CallbackContext
 
-from models import Numismatic as Coin
+from models import Numismatic
 
 logger    = logging.getLogger(__name__)
 PAGE_SIZE = 5
 
 
-def _sign(currency: str) -> str:
-    return {"UAH": "₴", "USD": "$", "EUR": "€"}.get(currency, currency)
-
-
-def _coin_block(coin: Coin) -> str:
-    s     = _sign(coin.currency or "UAH")
-    total = (coin.buy_price or 0) * (coin.quantity or 1)
+def _coin_block(coin: Numismatic) -> str:
     return (
-        f"🟢 <b>{coin.name}</b>  •  {coin.year or '—'} р.\n"
-        f"   🔢 {coin.quantity} шт.  •  💵 {coin.buy_price:,.2f} {s}/шт.\n"
-        f"   💼 Вкладено: <b>{total:,.2f} {s}</b>\n"
+        f"🟢 <b>{coin.name}</b>  •  {coin.mint_year or '—'} р.\n"
+        f"   💲 {coin.nominal or '—'}  •  {coin.metal_name or '—'} ({coin.metal_code or '—'})\n"
+        f"   ⚖️ {coin.metal_weight or 0} г  •  📐 {coin.diameter or 0} мм\n"
+        f"   🛒 {coin.quantity} шт.  •  💵 {coin.price_per_unit or 0:,.2f} ₴/шт.\n"
+        f"   🚚 Доставка: {coin.delivery_cost or 0:,.2f} ₴\n"
+        f"   💼 Загалом: <b>{coin.total_amount or 0:,.2f} ₴</b>  •  Собів.: <b>{coin.cost_per_unit or 0:,.2f} ₴/шт.</b>\n"
     )
 
 
 def _build_text(coins: list, page: int, total_pages: int) -> str:
     slice_ = coins[(page - 1) * PAGE_SIZE: page * PAGE_SIZE]
-    lines  = [f"🏛 <b>Портфель монет</b>  <i>({len(coins)} активних)</i>\n"]
+    lines  = [f"🏛 <b>Портфель монет</b>  <i>({len(coins)} поз.)</i>\n"]
 
     for coin in slice_:
         lines.append(_coin_block(coin))
 
-    # Зведення по валютах
-    by_cur: dict = {}
-    for c in coins:
-        cur = c.currency or "UAH"
-        by_cur.setdefault(cur, {"invested": 0, "count": 0, "s": _sign(cur)})
-        by_cur[cur]["invested"] += (c.buy_price or 0) * (c.quantity or 1)
-        by_cur[cur]["count"]    += c.quantity or 1
+    # Зведення
+    total_invested  = sum((c.total_amount or 0) for c in coins)
+    total_qty       = sum((c.quantity or 0) for c in coins)
 
     lines.append("─" * 24)
-    for v in by_cur.values():
-        lines.append(
-            f"💼 Всього вкладено: <b>{v['invested']:,.2f} {v['s']}</b>  |  "
-            f"Монет: <b>{v['count']} шт.</b>"
-        )
+    lines.append(
+        f"💼 Всього вкладено: <b>{total_invested:,.2f} ₴</b>  |  "
+        f"Монет: <b>{total_qty} шт.</b>"
+    )
 
     if total_pages > 1:
         lines.append(f"\n<i>Сторінка {page}/{total_pages}</i>")
@@ -60,7 +52,6 @@ def _kb(page: int, total_pages: int) -> InlineKeyboardMarkup:
         nav.append(InlineKeyboardButton("◀️", callback_data=f"num_portfolio_page_{page - 1}"))
     if page < total_pages:
         nav.append(InlineKeyboardButton("▶️", callback_data=f"num_portfolio_page_{page + 1}"))
-
     keyboard = []
     if nav:
         keyboard.append(nav)
@@ -79,8 +70,8 @@ async def show_num_portfolio(update: Update, context: CallbackContext, page: int
         return
 
     try:
-        session = Session()
-        all_coins = session.query(Coin).all()
+        session   = Session()
+        all_coins = session.query(Numismatic).all()
         session.close()
         active = [c for c in all_coins if not c.is_sold]
     except Exception as e:
@@ -121,7 +112,7 @@ async def show_num_sold(update: Update, context: CallbackContext, page: int = 1)
 
     try:
         session   = Session()
-        all_coins = session.query(Coin).all()
+        all_coins = session.query(Numismatic).all()
         session.close()
         sold = [c for c in all_coins if c.is_sold]
     except Exception as e:
@@ -143,14 +134,13 @@ async def show_num_sold(update: Update, context: CallbackContext, page: int = 1)
     page        = max(1, min(page, total_pages))
     slice_      = sold[(page - 1) * PAGE_SIZE: page * PAGE_SIZE]
 
-    lines = [f"✅ <b>Продані монети</b>  <i>({len(sold)} шт.)</i>\n"]
+    lines = [f"✅ <b>Продані монети</b>  <i>({len(sold)} поз.)</i>\n"]
     for coin in slice_:
-        s      = _sign(coin.currency or "UAH")
-        profit = ((coin.sell_price or 0) - (coin.buy_price or 0)) * (coin.quantity or 1)
+        profit = ((coin.sell_price or 0) - (coin.cost_per_unit or 0)) * (coin.quantity or 1)
         lines.append(
-            f"⚪️ <b>{coin.name}</b>  •  {coin.year or '—'} р.\n"
-            f"   🔢 {coin.quantity} шт.  •  💵 {coin.buy_price:,.2f} → {coin.sell_price:,.2f} {s}\n"
-            f"   P&L: <b>{profit:+,.2f} {s}</b>\n"
+            f"⚪️ <b>{coin.name}</b>  •  {coin.mint_year or '—'} р.\n"
+            f"   🛒 {coin.quantity} шт.  •  Собів.: {coin.cost_per_unit or 0:,.2f} ₴ → Продано: {coin.sell_price or 0:,.2f} ₴\n"
+            f"   P&L: <b>{profit:+,.2f} ₴</b>\n"
         )
 
     nav = []

@@ -8,13 +8,9 @@ from collections import defaultdict
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import CallbackContext
 
-from models import Numismatic as Coin
+from models import Numismatic
 
 logger = logging.getLogger(__name__)
-
-
-def _sign(currency: str) -> str:
-    return {"UAH": "₴", "USD": "$", "EUR": "€"}.get(currency, currency)
 
 
 async def show_num_stats(update: Update, context: CallbackContext):
@@ -28,7 +24,7 @@ async def show_num_stats(update: Update, context: CallbackContext):
 
     try:
         session   = Session()
-        all_coins = session.query(Coin).all()
+        all_coins = session.query(Numismatic).all()
         session.close()
     except Exception as e:
         logger.error(f"Coin stats error: {e}")
@@ -48,65 +44,70 @@ async def show_num_stats(update: Update, context: CallbackContext):
     active = [c for c in all_coins if not c.is_sold]
     sold   = [c for c in all_coins if c.is_sold]
 
-    total_count  = len(all_coins)
-    active_count = sum(c.quantity or 1 for c in active)
-    sold_count   = sum(c.quantity or 1 for c in sold)
+    total_positions  = len(all_coins)
+    active_qty       = sum(c.quantity or 0 for c in active)
+    sold_qty         = sum(c.quantity or 0 for c in sold)
 
-    # Інвестовано по валютах
-    invested_by_cur: dict = defaultdict(float)
-    for c in all_coins:
-        invested_by_cur[c.currency or "UAH"] += (c.buy_price or 0) * (c.quantity or 1)
+    total_invested   = sum(c.total_amount or 0 for c in all_coins)
+    active_invested  = sum(c.total_amount or 0 for c in active)
 
-    # Реалізований P&L
-    pnl_by_cur: dict = defaultdict(float)
-    for c in sold:
-        if c.sell_price:
-            pnl_by_cur[c.currency or "UAH"] += (c.sell_price - (c.buy_price or 0)) * (c.quantity or 1)
+    # P&L по проданих
+    total_pnl = sum(
+        ((c.sell_price or 0) - (c.cost_per_unit or 0)) * (c.quantity or 1)
+        for c in sold if c.sell_price
+    )
 
-    # Найкраща монета по прибутку
+    # Найкраща угода
     best = None
     best_pnl = None
     for c in sold:
         if c.sell_price:
-            pnl = (c.sell_price - (c.buy_price or 0)) * (c.quantity or 1)
+            pnl = (c.sell_price - (c.cost_per_unit or 0)) * (c.quantity or 1)
             if best_pnl is None or pnl > best_pnl:
                 best_pnl = pnl
                 best     = c
 
-    # Топ за роками
+    # Топ металів
+    by_metal: dict = defaultdict(lambda: {"qty": 0, "invested": 0})
+    for c in all_coins:
+        key = f"{c.metal_name or '—'} ({c.metal_code or '—'})"
+        by_metal[key]["qty"]      += c.quantity or 0
+        by_metal[key]["invested"] += c.total_amount or 0
+    top_metals = sorted(by_metal.items(), key=lambda x: x[1]["qty"], reverse=True)[:5]
+
+    # Топ років карбування
     by_year: dict = defaultdict(int)
     for c in all_coins:
-        if c.year:
-            by_year[c.year] += c.quantity or 1
+        if c.mint_year:
+            by_year[c.mint_year] += c.quantity or 0
     top_years = sorted(by_year.items(), key=lambda x: x[1], reverse=True)[:5]
 
-    # ── Формуємо текст ──────────────────────────────────────────────────────
+    # ── Текст ──────────────────────────────────────────────────────────────
     text = "📊 <b>Статистика нумізматики</b>\n\n"
 
     text += (
-        f"🪙 Всього позицій: <b>{total_count}</b>\n"
-        f"   🟢 Активних монет: <b>{active_count} шт.</b>  •  "
-        f"✅ Продано: <b>{sold_count} шт.</b>\n\n"
+        f"🪙 Всього позицій: <b>{total_positions}</b>\n"
+        f"   🟢 Активних: <b>{active_qty} шт.</b>  •  ✅ Продано: <b>{sold_qty} шт.</b>\n\n"
+        f"💼 Загалом вкладено: <b>{total_invested:,.2f} ₴</b>\n"
+        f"   🟢 В портфелі: <b>{active_invested:,.2f} ₴</b>\n\n"
     )
 
-    for cur, val in invested_by_cur.items():
-        text += f"💼 Вкладено: <b>{val:,.2f} {_sign(cur)}</b>\n"
-
-    text += "\n"
-
-    if pnl_by_cur:
-        for cur, pnl in pnl_by_cur.items():
-            s    = _sign(cur)
-            sign = "+" if pnl >= 0 else ""
-            text += f"💰 Реалізований P&L: <b>{sign}{pnl:,.2f} {s}</b>\n"
-        text += "\n"
+    if sold:
+        sign = "+" if total_pnl >= 0 else ""
+        text += f"💰 Реалізований P&L: <b>{sign}{total_pnl:,.2f} ₴</b>\n\n"
 
     if best and best_pnl is not None:
-        s = _sign(best.currency or "UAH")
-        text += f"🏆 Найкраща угода: <b>{best.name}</b> — {best_pnl:+,.2f} {s}\n\n"
+        sign = "+" if best_pnl >= 0 else ""
+        text += f"🏆 Найкраща угода: <b>{best.name}</b> — {sign}{best_pnl:,.2f} ₴\n\n"
+
+    if top_metals:
+        text += "⚗️ <b>Метали:</b>\n"
+        for metal, info in top_metals:
+            text += f"  • {metal} — {info['qty']} шт.  •  {info['invested']:,.0f} ₴\n"
+        text += "\n"
 
     if top_years:
-        text += "📅 <b>Топ років випуску:</b>\n"
+        text += "📅 <b>Топ років карбування:</b>\n"
         for year, qty in top_years:
             text += f"  • {year} р. — {qty} шт.\n"
 
