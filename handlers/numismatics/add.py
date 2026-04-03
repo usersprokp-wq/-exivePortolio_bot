@@ -107,7 +107,7 @@ async def handle_num_confirm(update: Update, context: CallbackContext):
     context.user_data.clear()
 
     try:
-        from models import Coin
+        from models import Numismatic as Coin
         Session = context.bot_data.get('Session')
         if Session:
             session = Session()

@@ -6,7 +6,7 @@ import logging
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import CallbackContext
 
-from models import Coin
+from models import Numismatic as Coin
 
 logger    = logging.getLogger(__name__)
 PAGE_SIZE = 5

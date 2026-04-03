@@ -151,11 +151,12 @@ class Crypto(Base):
 class Numismatic(Base):
     """Модель для нумізматики"""
     __tablename__ = 'numismatics'
-    id = Column(Integer, primary_key=True)
-    date = Column(String(50))
-    operation_type = Column(String(20))
-    name = Column(String(200))
-    quantity = Column(Integer)
-    price_per_unit = Column(Float)
-    total_amount = Column(Float)
-    created_at = Column(String(50), default=datetime.now().isoformat())
+    id             = Column(Integer, primary_key=True)
+    name           = Column(String(200))          # Назва монети
+    year           = Column(Integer)              # Рік випуску
+    quantity       = Column(Integer)              # Кількість
+    currency       = Column(String(10))           # UAH / USD / EUR
+    buy_price      = Column(Float)                # Ціна купівлі за 1 шт.
+    sell_price     = Column(Float)                # Ціна продажу за 1 шт. (None якщо не продана)
+    is_sold        = Column(Integer, default=0)   # 0 = активна, 1 = продана
+    created_at     = Column(String(50), default=datetime.now().isoformat())
