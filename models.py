@@ -124,6 +124,16 @@ class Deposit(Base):
     created_at       = Column(String(50), default=datetime.now().isoformat())
 
 
+class DepositProfitRecord(Base):
+    """Таблиця для відслідкування списань прибутків депозитів"""
+    __tablename__ = 'deposit_profit_records'
+    id             = Column(Integer, primary_key=True)
+    operation_date = Column(String(50))   # Дата списання
+    currency       = Column(String(10))   # UAH / USD / EUR
+    amount         = Column(Float)        # Сума списання
+    created_at     = Column(String(50), default=datetime.now().isoformat())
+
+
 class Crypto(Base):
     """Модель для криптовалют"""
     __tablename__ = 'cryptos'

@@ -51,6 +51,8 @@ from handlers.deposit import (
     handle_deposit_send_contract,
     show_deposit_past,
     show_deposit_profit,
+    handle_deposit_write_off,
+    handle_message_deposit_profit,
     show_deposit_stats,
 )
 
@@ -170,7 +172,6 @@ def register_ovdp_handlers(application: Application):
 def register_deposit_handlers(application: Application):
     logger.info("Реєструємо обробники Депозиту...")
 
-    # Головне меню
     application.add_handler(CallbackQueryHandler(show_deposit_menu,               pattern='^deposit$'))
 
     # Додати запис
@@ -197,20 +198,18 @@ def register_deposit_handlers(application: Application):
     application.add_handler(CallbackQueryHandler(handle_deposit_confirm,          pattern='^deposit_add_confirm$'))
     application.add_handler(CallbackQueryHandler(handle_deposit_cancel,           pattern='^deposit_add_cancel$'))
 
-    # Мої записи + пагінація
+    # Мої записи
     application.add_handler(CallbackQueryHandler(
-        lambda u, c: show_deposit_list(u, c, 1),
-        pattern='^deposit_list$'
+        lambda u, c: show_deposit_list(u, c, 1), pattern='^deposit_list$'
     ))
     application.add_handler(CallbackQueryHandler(
         lambda u, c: show_deposit_list(u, c, int(u.callback_query.data.replace('deposit_list_page_', ''))),
         pattern='^deposit_list_page_'
     ))
 
-    # Портфель + пагінація + закриття
+    # Портфель
     application.add_handler(CallbackQueryHandler(
-        lambda u, c: show_deposit_portfolio(u, c, 1),
-        pattern='^deposit_portfolio$'
+        lambda u, c: show_deposit_portfolio(u, c, 1), pattern='^deposit_portfolio$'
     ))
     application.add_handler(CallbackQueryHandler(
         lambda u, c: show_deposit_portfolio(u, c, int(u.callback_query.data.replace('deposit_portfolio_page_', ''))),
@@ -218,29 +217,34 @@ def register_deposit_handlers(application: Application):
     ))
     application.add_handler(CallbackQueryHandler(handle_deposit_close,            pattern='^deposit_close_'))
 
-    # Минулі депозити + пагінація
+    # Минулі
     application.add_handler(CallbackQueryHandler(
-        lambda u, c: show_deposit_past(u, c, 1),
-        pattern='^deposit_past$'
+        lambda u, c: show_deposit_past(u, c, 1), pattern='^deposit_past$'
     ))
     application.add_handler(CallbackQueryHandler(
         lambda u, c: show_deposit_past(u, c, int(u.callback_query.data.replace('deposit_past_page_', ''))),
         pattern='^deposit_past_page_'
     ))
 
-    # Заглушки
+    # Прибуток
     application.add_handler(CallbackQueryHandler(show_deposit_profit,             pattern='^deposit_profit$'))
+    application.add_handler(CallbackQueryHandler(handle_deposit_write_off,        pattern='^deposit_write_off_profit$'))
+
+    # Статистика
     application.add_handler(CallbackQueryHandler(show_deposit_stats,              pattern='^deposit_stats$'))
 
     logger.info("✅ Обробники Депозиту зареєстровано!")
 
 
 # ═══════════════════════════════════════════════════════════
-# ОБРОБКА ПОВІДОМЛЕНЬ (текст + документи)
+# ОБРОБКА ПОВІДОМЛЕНЬ
 # ═══════════════════════════════════════════════════════════
 
 async def handle_message_unified(update: Update, context: CallbackContext):
-    if 'deposit_step' in context.user_data:
+    # Прибуток депозитів — списання
+    if context.user_data.get('deposit_profit_step') == 'write_off':
+        await handle_message_deposit_profit(update, context)
+    elif 'deposit_step' in context.user_data:
         await handle_message_deposit(update, context)
     elif 'bond_step' in context.user_data or 'profit_step' in context.user_data:
         await handle_message_ovdp(update, context)
@@ -298,7 +302,6 @@ def main():
         )
     ))
 
-    # Текстові повідомлення та документи (PDF договір)
     app.add_handler(MessageHandler(
         (filters.TEXT | filters.Document.PDF) & ~filters.COMMAND,
         handle_message_unified
