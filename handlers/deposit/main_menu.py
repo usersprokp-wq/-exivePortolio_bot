@@ -1,37 +1,34 @@
-from aiogram import Router, F
-from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
-from aiogram.fsm.context import FSMContext
-
-router = Router()
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram.ext import CallbackContext
 
 
 def get_deposit_menu_keyboard() -> InlineKeyboardMarkup:
     """Головне меню розділу Депозит."""
-    return InlineKeyboardMarkup(inline_keyboard=[
+    return InlineKeyboardMarkup([
         [
-            InlineKeyboardButton(text="➕ Додати запис", callback_data="deposit:add"),
-            InlineKeyboardButton(text="📋 Мої записи",  callback_data="deposit:list"),
+            InlineKeyboardButton("➕ Додати запис",  callback_data="deposit_add"),
+            InlineKeyboardButton("📋 Мої записи",    callback_data="deposit_list"),
         ],
         [
-            InlineKeyboardButton(text="🏦 Портфель",    callback_data="deposit:portfolio"),
-            InlineKeyboardButton(text="💰 Прибуток",    callback_data="deposit:profit"),
+            InlineKeyboardButton("🏦 Портфель",      callback_data="deposit_portfolio"),
+            InlineKeyboardButton("💰 Прибуток",      callback_data="deposit_profit"),
         ],
         [
-            InlineKeyboardButton(text="📊 Статистика",  callback_data="deposit:stats"),
+            InlineKeyboardButton("📊 Статистика",    callback_data="deposit_stats"),
         ],
         [
-            InlineKeyboardButton(text="🔙 Назад",       callback_data="main_menu"),
+            InlineKeyboardButton("🔙 Назад",         callback_data="back_to_menu"),
         ],
     ])
 
 
-@router.callback_query(F.data == "deposit")
-async def deposit_menu(callback: CallbackQuery, state: FSMContext):
+async def show_deposit_menu(update: Update, context: CallbackContext):
     """Відкриває головне меню депозитів."""
-    await state.clear()
-    await callback.message.edit_text(
+    context.user_data.clear()
+    query = update.callback_query
+    await query.answer()
+    await query.edit_message_text(
         "🏦 <b>Депозити</b>\n\nОберіть дію:",
         reply_markup=get_deposit_menu_keyboard(),
         parse_mode="HTML",
     )
-    await callback.answer()
