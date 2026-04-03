@@ -429,6 +429,9 @@ async def handle_deposit_confirm(update: Update, context: CallbackContext):
         Session = context.bot_data.get('Session')
         if Session:
             c       = _calc(data.get('amount', 0), data.get('rate', 0), data.get('term_days', 0))
+            # Якщо дата закриття вже минула — одразу закритий
+            end_dt    = datetime.strptime(data.get('end_date', ''), "%d.%m.%Y")
+            is_active = 1 if end_dt.date() >= datetime.now().date() else 0
             session = Session()
             deposit = Deposit(
                 bank_name        = data.get('bank_name'),
@@ -444,7 +447,7 @@ async def handle_deposit_confirm(update: Update, context: CallbackContext):
                 tax_amount       = round(c['tax'], 2),
                 net_profit       = round(c['net_profit'], 2),
                 net_per_month    = round(c['net_per_month'], 2),
-                is_active        = 1,
+                is_active        = is_active,
                 contract_file_id = data.get('contract_file_id'),
                 created_at       = datetime.now().isoformat(),
             )

@@ -43,8 +43,12 @@ async def show_deposit_profit(update: Update, context: CallbackContext):
         wr_records = session.query(DepositProfitRecord).all()
         session.close()
 
-        # ── Тільки закриті депозити ────────────────────────────────────────────
-        closed = [d for d in all_dep if d.is_active == 0]
+        # ── Тільки закриті депозити (is_active=0 або дата вже минула) ──────────
+        today  = date.today()
+        closed = [
+            d for d in all_dep
+            if d.is_active == 0 or (d.end_date and _parse_date(d.end_date) < today)
+        ]
 
         if not closed:
             await query.edit_message_text(
