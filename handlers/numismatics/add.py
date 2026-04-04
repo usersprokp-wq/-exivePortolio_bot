@@ -11,11 +11,12 @@ handlers/numismatics/add.py
   6.  mint_year     — рік карбування
   7.  mintage       — тираж, шт.
   8.  diameter      — діаметр, мм
-  9.  price_per_unit — ціна 1 шт., ₴
-  10. quantity      — кількість
-  11. delivery_cost — сума доставки, ₴
+  9.  date_issued   — дата введення в обіг (DD.MM.YYYY)
+  10. price_per_unit — ціна 1 шт., ₴
+  11. quantity      — кількість
+  12. delivery_cost — сума доставки, ₴
   → автоматично: total_amount, cost_per_unit
-  12. confirm
+  13. confirm
 
 Флоу ПРОДАЖ:
   0.  operation_type — кнопки (купівля / продаж)
@@ -80,6 +81,7 @@ def _summary_buy(d: dict) -> str:
         + row("📅", "Рік карбування:",  str(d.get("mint_year", "—")))
         + row("🔢", "Тираж:",           f"{d.get('mintage', 0):,} шт.")
         + row("📐", "Діаметр:",         f"{d.get('diameter', 0)} мм")
+        + row("🗓", "Дата в обіг:",     d.get("date_issued", "—"))
         + "─" * 24 + "\n"
         + row("💵", "Ціна 1 шт.:",      f"{d.get('price_per_unit', 0):,.2f} ₴")
         + row("🔢", "Кількість:",        f"{d.get('quantity', 1)} шт.")
@@ -137,7 +139,7 @@ async def handle_num_op_buy(update: Update, context: CallbackContext):
     context.user_data["num_step"]       = "name"
     await query.edit_message_text(
         "🛒 <b>Купівля монети</b>\n\n"
-        "Крок 1/11 — Введіть <b>назву</b> монети:",
+        "Крок 1/12 — Введіть <b>назву</b> монети:",
         reply_markup=_kb_cancel(),
         parse_mode="HTML",
     )
@@ -262,6 +264,7 @@ async def handle_num_confirm(update: Update, context: CallbackContext):
                     mint_year      = data.get("mint_year"),
                     mintage        = data.get("mintage"),
                     diameter       = data.get("diameter"),
+                    date_issued    = data.get("date_issued"),
                     price_per_unit = data.get("price_per_unit"),
                     quantity       = data.get("quantity"),
                     delivery_cost  = data.get("delivery_cost", 0),
@@ -314,20 +317,22 @@ async def handle_num_cancel(update: Update, context: CallbackContext):
 
 STEPS = [
     # (поточний_крок,  поле_збереження,  питання_наступного_кроку,  наступний_крок)
-    ("nominal",        "nominal",        "3/11 — Введіть <b>позначення металу</b> (напр. <code>au900</code>, <code>ag925</code>):",   "metal_code"),
-    ("metal_code",     "metal_code",     "4/11 — Введіть <b>назву металу</b> (напр. <code>золото</code>, <code>срібло</code>):",      "metal_name"),
-    ("metal_name",     "metal_name",     "5/11 — Введіть <b>масу чистого металу</b> у грамах (напр. <code>7.78</code>):",            "metal_weight"),
-    ("metal_weight",   "metal_weight",   "6/11 — Введіть <b>рік карбування</b> (напр. <code>2023</code>):",                          "mint_year"),
-    ("mint_year",      "mint_year",      "7/11 — Введіть <b>тираж</b> у штуках (напр. <code>5000</code>):",                          "mintage"),
-    ("mintage",        "mintage",        "8/11 — Введіть <b>діаметр</b> у мм (напр. <code>38.6</code>):",                            "diameter"),
-    ("diameter",       "diameter",       "9/11 — Введіть <b>ціну 1 шт.</b> у ₴ (напр. <code>12500</code>):",                         "price_per_unit"),
-    ("price_per_unit", "price_per_unit", "10/11 — Введіть <b>кількість</b> (напр. <code>1</code>):",                                  "quantity"),
-    ("quantity",       "quantity",       "11/11 — Введіть <b>суму доставки</b> у ₴ (або <code>0</code> якщо без доставки):",         "delivery_cost"),
+    ("nominal",        "nominal",        "3/12 — Введіть <b>позначення металу</b> (напр. <code>au900</code>, <code>ag925</code>):",   "metal_code"),
+    ("metal_code",     "metal_code",     "4/12 — Введіть <b>назву металу</b> (напр. <code>золото</code>, <code>срібло</code>):",      "metal_name"),
+    ("metal_name",     "metal_name",     "5/12 — Введіть <b>масу чистого металу</b> у грамах (напр. <code>7.78</code>):",            "metal_weight"),
+    ("metal_weight",   "metal_weight",   "6/12 — Введіть <b>рік карбування</b> (напр. <code>2023</code>):",                          "mint_year"),
+    ("mint_year",      "mint_year",      "7/12 — Введіть <b>тираж</b> у штуках (напр. <code>5000</code>):",                          "mintage"),
+    ("mintage",        "mintage",        "8/12 — Введіть <b>діаметр</b> у мм (напр. <code>38.6</code>):",                            "diameter"),
+    ("diameter",       "diameter",       "9/12 — Введіть <b>дату введення в обіг</b> у форматі <code>ДД.ММ.РРРР</code> (напр. <code>27.06.2025</code>):", "date_issued"),
+    ("date_issued",    "date_issued",    "10/12 — Введіть <b>ціну 1 шт.</b> у ₴ (напр. <code>12500</code>):",                        "price_per_unit"),
+    ("price_per_unit", "price_per_unit", "11/12 — Введіть <b>кількість</b> (напр. <code>1</code>):",                                  "quantity"),
+    ("quantity",       "quantity",       "12/12 — Введіть <b>суму доставки</b> у ₴ (або <code>0</code> якщо без доставки):",         "delivery_cost"),
     ("delivery_cost",  "delivery_cost",  None,                                                                                        None),
 ]
 
 FLOAT_FIELDS = {"metal_weight", "diameter", "price_per_unit", "delivery_cost", "sell_price"}
 INT_FIELDS   = {"mint_year", "mintage", "quantity"}
+DATE_FIELDS  = {"date_issued"}
 
 
 async def handle_message_numismatics(update: Update, context: CallbackContext):
@@ -367,7 +372,7 @@ async def handle_message_numismatics(update: Update, context: CallbackContext):
         context.user_data["num_step"] = "nominal"
         await update.message.reply_text(
             f"✅ Назва: <b>{text}</b>\n\n"
-            "2/11 — Введіть <b>номінал</b> монети (напр. <code>2 грн</code>):",
+            "2/12 — Введіть <b>номінал</b> монети (напр. <code>2 грн</code>):",
             reply_markup=_kb_cancel(), parse_mode="HTML",
         )
         return
@@ -400,6 +405,17 @@ async def handle_message_numismatics(update: Update, context: CallbackContext):
             )
             return
         context.user_data[current_field] = value
+
+    elif current_field in DATE_FIELDS:
+        try:
+            datetime.strptime(text, "%d.%m.%Y")
+        except ValueError:
+            await update.message.reply_text(
+                "⚠️ Введіть дату у форматі <code>ДД.ММ.РРРР</code> (напр. <code>27.06.2025</code>):",
+                reply_markup=_kb_cancel(), parse_mode="HTML",
+            )
+            return
+        context.user_data[current_field] = text
 
     else:
         if not text:

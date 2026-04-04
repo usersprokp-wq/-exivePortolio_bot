@@ -152,6 +152,7 @@ class Numismatic(Base):
     """Модель для нумізматики"""
     __tablename__ = 'numismatics'
     id               = Column(Integer, primary_key=True)
+    operation_type   = Column(String(20), default='купівля')  # купівля / продаж
     name             = Column(String(200))   # Назва монети
     nominal          = Column(String(50))    # Номінал (напр. 2 грн)
     metal_code       = Column(String(50))    # Позначення металу (au900, ag925...)
@@ -160,6 +161,7 @@ class Numismatic(Base):
     mint_year        = Column(Integer)       # Рік карбування
     mintage          = Column(Integer)       # Тираж, шт.
     diameter         = Column(Float)         # Діаметр, мм
+    date_issued      = Column(String(20))    # Дата введення в обіг DD.MM.YYYY
     price_per_unit   = Column(Float)         # Ціна 1 шт., ₴
     quantity         = Column(Integer)       # Кількість
     delivery_cost    = Column(Float)         # Сума доставки, ₴
