@@ -59,12 +59,18 @@ from handlers.deposit import (
 from handlers.numismatics import (
     show_numismatics_menu,
     start_numismatics_add,
+    handle_num_op_buy,
+    handle_num_op_sell,
+    handle_num_sell_coin_selected,
     handle_num_confirm,
     handle_num_cancel,
     handle_message_numismatics,
     show_num_list,
     show_num_portfolio,
     show_num_sold,
+    show_num_pnl,
+    handle_num_pnl_coin_selected,
+    handle_message_num_pnl,
     show_num_profit,
     handle_num_sell_selected,
     handle_message_num_profit,
@@ -188,25 +194,18 @@ def register_deposit_handlers(application: Application):
     logger.info("Реєструємо обробники Депозиту...")
 
     application.add_handler(CallbackQueryHandler(show_deposit_menu,               pattern='^deposit$'))
-
     application.add_handler(CallbackQueryHandler(start_deposit_add,               pattern='^deposit_add$'))
     application.add_handler(CallbackQueryHandler(handle_deposit_currency,         pattern='^deposit_currency_'))
-
     application.add_handler(CallbackQueryHandler(handle_deposit_calendar_show,    pattern='^dep_start_calendar$'))
     application.add_handler(CallbackQueryHandler(handle_deposit_calendar_nav,     pattern='^dep_(start|end)_cal_(prev|next)_'))
     application.add_handler(CallbackQueryHandler(handle_deposit_start_selected,   pattern='^dep_start_\d'))
-
     application.add_handler(CallbackQueryHandler(handle_deposit_end_calendar_show, pattern='^dep_end_calendar$'))
     application.add_handler(CallbackQueryHandler(handle_deposit_end_selected,     pattern='^dep_end_\d'))
-
     application.add_handler(CallbackQueryHandler(lambda u, c: u.callback_query.answer(), pattern='^dep_cal_ignore$'))
-
     application.add_handler(CallbackQueryHandler(handle_deposit_contract_skip,    pattern='^deposit_contract_skip$'))
     application.add_handler(CallbackQueryHandler(handle_deposit_send_contract,    pattern='^deposit_contract_\d+$'))
-
     application.add_handler(CallbackQueryHandler(handle_deposit_confirm,          pattern='^deposit_add_confirm$'))
     application.add_handler(CallbackQueryHandler(handle_deposit_cancel,           pattern='^deposit_add_cancel$'))
-
     application.add_handler(CallbackQueryHandler(
         lambda u, c: show_deposit_list(u, c, 1), pattern='^deposit_list$'
     ))
@@ -214,7 +213,6 @@ def register_deposit_handlers(application: Application):
         lambda u, c: show_deposit_list(u, c, int(u.callback_query.data.replace('deposit_list_page_', ''))),
         pattern='^deposit_list_page_'
     ))
-
     application.add_handler(CallbackQueryHandler(
         lambda u, c: show_deposit_portfolio(u, c, 1), pattern='^deposit_portfolio$'
     ))
@@ -223,7 +221,6 @@ def register_deposit_handlers(application: Application):
         pattern='^deposit_portfolio_page_'
     ))
     application.add_handler(CallbackQueryHandler(handle_deposit_close,            pattern='^deposit_close_'))
-
     application.add_handler(CallbackQueryHandler(
         lambda u, c: show_deposit_past(u, c, 1), pattern='^deposit_past$'
     ))
@@ -231,10 +228,8 @@ def register_deposit_handlers(application: Application):
         lambda u, c: show_deposit_past(u, c, int(u.callback_query.data.replace('deposit_past_page_', ''))),
         pattern='^deposit_past_page_'
     ))
-
     application.add_handler(CallbackQueryHandler(show_deposit_profit,             pattern='^deposit_profit$'))
     application.add_handler(CallbackQueryHandler(handle_deposit_write_off,        pattern='^deposit_write_off_profit$'))
-
     application.add_handler(CallbackQueryHandler(show_deposit_stats,              pattern='^deposit_stats$'))
 
     logger.info("✅ Обробники Депозиту зареєстровано!")
@@ -247,12 +242,19 @@ def register_deposit_handlers(application: Application):
 def register_numismatics_handlers(application: Application):
     logger.info("Реєструємо обробники Нумізматики...")
 
-    application.add_handler(CallbackQueryHandler(show_numismatics_menu,   pattern='^numismatics$'))
+    application.add_handler(CallbackQueryHandler(show_numismatics_menu,       pattern='^numismatics$'))
 
-    application.add_handler(CallbackQueryHandler(start_numismatics_add,   pattern='^num_add$'))
-    application.add_handler(CallbackQueryHandler(handle_num_confirm,       pattern='^num_add_confirm$'))
-    application.add_handler(CallbackQueryHandler(handle_num_cancel,        pattern='^num_add_cancel$'))
+    # Додати запис — тип операції
+    application.add_handler(CallbackQueryHandler(start_numismatics_add,       pattern='^num_add$'))
+    application.add_handler(CallbackQueryHandler(handle_num_op_buy,            pattern='^num_op_buy$'))
+    application.add_handler(CallbackQueryHandler(handle_num_op_sell,           pattern='^num_op_sell$'))
+    application.add_handler(CallbackQueryHandler(handle_num_sell_coin_selected, pattern='^num_sell_select_'))
 
+    # Підтвердження / скасування
+    application.add_handler(CallbackQueryHandler(handle_num_confirm,           pattern='^num_add_confirm$'))
+    application.add_handler(CallbackQueryHandler(handle_num_cancel,            pattern='^num_add_cancel$'))
+
+    # Мої записи
     application.add_handler(CallbackQueryHandler(
         lambda u, c: show_num_list(u, c, 1), pattern='^num_list$'
     ))
@@ -261,6 +263,7 @@ def register_numismatics_handlers(application: Application):
         pattern='^num_list_page_'
     ))
 
+    # Портфель
     application.add_handler(CallbackQueryHandler(
         lambda u, c: show_num_portfolio(u, c, 1), pattern='^num_portfolio$'
     ))
@@ -269,6 +272,11 @@ def register_numismatics_handlers(application: Application):
         pattern='^num_portfolio_page_'
     ))
 
+    # P&L портфелю
+    application.add_handler(CallbackQueryHandler(show_num_pnl,                 pattern='^num_pnl$'))
+    application.add_handler(CallbackQueryHandler(handle_num_pnl_coin_selected, pattern='^num_pnl_coin_'))
+
+    # Продані монети
     application.add_handler(CallbackQueryHandler(
         lambda u, c: show_num_sold(u, c, 1), pattern='^num_sold$'
     ))
@@ -277,10 +285,12 @@ def register_numismatics_handlers(application: Application):
         pattern='^num_sold_page_'
     ))
 
-    application.add_handler(CallbackQueryHandler(show_num_profit,          pattern='^num_profit$'))
-    application.add_handler(CallbackQueryHandler(handle_num_sell_selected, pattern='^num_sell_'))
+    # Прибуток
+    application.add_handler(CallbackQueryHandler(show_num_profit,              pattern='^num_profit$'))
+    application.add_handler(CallbackQueryHandler(handle_num_sell_selected,     pattern='^num_sell_\d'))
 
-    application.add_handler(CallbackQueryHandler(show_num_stats,           pattern='^num_stats$'))
+    # Статистика
+    application.add_handler(CallbackQueryHandler(show_num_stats,               pattern='^num_stats$'))
 
     logger.info("✅ Обробники Нумізматики зареєстровано!")
 
@@ -290,7 +300,9 @@ def register_numismatics_handlers(application: Application):
 # ═══════════════════════════════════════════════════════════
 
 async def handle_message_unified(update: Update, context: CallbackContext):
-    if context.user_data.get('num_profit_step') == 'sell_price':
+    if context.user_data.get('num_pnl_step') == 'market_price':
+        await handle_message_num_pnl(update, context)
+    elif context.user_data.get('num_profit_step') == 'sell_price':
         await handle_message_num_profit(update, context)
     elif 'num_step' in context.user_data:
         await handle_message_numismatics(update, context)

@@ -1,11 +1,12 @@
 """
 handlers/numismatics/add.py
 
-Флоу:
+Флоу КУПІВЛЯ:
+  0.  operation_type — кнопки (купівля / продаж)
   1.  name          — назва монети
-  2.  nominal       — номінал (текст, напр. "2 грн")
-  3.  metal_code    — позначення металу (au900, ag925...)
-  4.  metal_name    — назва металу (золото, срібло...)
+  2.  nominal       — номінал
+  3.  metal_code    — позначення металу (au900...)
+  4.  metal_name    — назва металу (золото...)
   5.  metal_weight  — маса чистого металу, г
   6.  mint_year     — рік карбування
   7.  mintage       — тираж, шт.
@@ -15,6 +16,12 @@ handlers/numismatics/add.py
   11. delivery_cost — сума доставки, ₴
   → автоматично: total_amount, cost_per_unit
   12. confirm
+
+Флоу ПРОДАЖ:
+  0.  operation_type — кнопки (купівля / продаж)
+  1.  Вибір монети з портфелю (кнопки)
+  2.  sell_price    — ціна продажу за 1 шт.
+  3.  confirm
 """
 
 from datetime import datetime
@@ -26,6 +33,16 @@ def _kb_cancel() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([[
         InlineKeyboardButton("❌ Скасувати", callback_data="num_add_cancel")
     ]])
+
+
+def _kb_operation_type() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("🛒 Купівля", callback_data="num_op_buy"),
+            InlineKeyboardButton("💸 Продаж",  callback_data="num_op_sell"),
+        ],
+        [InlineKeyboardButton("❌ Скасувати", callback_data="num_add_cancel")],
+    ])
 
 
 def _kb_confirm() -> InlineKeyboardMarkup:
@@ -45,7 +62,7 @@ def _calc(d: dict) -> tuple[float, float]:
     return round(total, 2), round(cost, 2)
 
 
-def _summary(d: dict) -> str:
+def _summary_buy(d: dict) -> str:
     total, cost = _calc(d)
     W = 18
 
@@ -54,7 +71,7 @@ def _summary(d: dict) -> str:
         return f"{icon} <code>{label}{' ' * max(pad, 1)}{value}</code>\n"
 
     return (
-        "📋 <b>Перевірте дані монети:</b>\n\n"
+        "📋 <b>Перевірте дані монети (купівля):</b>\n\n"
         + row("🪙", "Назва:",           d.get("name", "—"))
         + row("💲", "Номінал:",         d.get("nominal", "—"))
         + row("⚗️",  "Метал (код):",    d.get("metal_code", "—"))
@@ -73,16 +90,144 @@ def _summary(d: dict) -> str:
     )
 
 
+def _summary_sell(d: dict) -> str:
+    W = 18
+
+    def row(icon: str, label: str, value: str) -> str:
+        pad = W - len(label)
+        return f"{icon} <code>{label}{' ' * max(pad, 1)}{value}</code>\n"
+
+    sell_price = d.get("sell_price", 0) or 0
+    cost       = d.get("cost_per_unit", 0) or 0
+    qty        = d.get("quantity", 1) or 1
+    pnl        = (sell_price - cost) * qty
+
+    return (
+        "📋 <b>Перевірте дані продажу:</b>\n\n"
+        + row("🪙", "Монета:",          d.get("name", "—"))
+        + row("💲", "Номінал:",         d.get("nominal", "—"))
+        + row("🔢", "Кількість:",       f"{qty} шт.")
+        + row("📊", "Собівартість:",    f"{cost:,.2f} ₴/шт.")
+        + "─" * 24 + "\n"
+        + row("💸", "Ціна продажу:",    f"{sell_price:,.2f} ₴/шт.")
+        + row("💰", "P&L:",             f"{pnl:+,.2f} ₴")
+    )
+
+
 # ── Entry ─────────────────────────────────────────────────────────────────────
 
 async def start_numismatics_add(update: Update, context: CallbackContext):
     context.user_data.clear()
-    context.user_data["num_step"] = "name"
     query = update.callback_query
     await query.answer()
     await query.edit_message_text(
-        "🏛 <b>Додати монету</b>\n\n"
+        "🏛 <b>Додати запис</b>\n\nОберіть тип операції:",
+        reply_markup=_kb_operation_type(),
+        parse_mode="HTML",
+    )
+
+
+# ── Operation type callbacks ──────────────────────────────────────────────────
+
+async def handle_num_op_buy(update: Update, context: CallbackContext):
+    """Обрано купівля — починаємо флоу купівлі."""
+    query = update.callback_query
+    await query.answer()
+    context.user_data["operation_type"] = "купівля"
+    context.user_data["num_step"]       = "name"
+    await query.edit_message_text(
+        "🛒 <b>Купівля монети</b>\n\n"
         "Крок 1/11 — Введіть <b>назву</b> монети:",
+        reply_markup=_kb_cancel(),
+        parse_mode="HTML",
+    )
+
+
+async def handle_num_op_sell(update: Update, context: CallbackContext):
+    """Обрано продаж — показуємо список монет з портфелю."""
+    query = update.callback_query
+    await query.answer()
+    context.user_data["operation_type"] = "продаж"
+
+    Session = context.bot_data.get('Session')
+    if not Session:
+        await query.edit_message_text("❌ Помилка підключення до бази даних")
+        return
+
+    try:
+        from models import Numismatic
+        session   = Session()
+        all_coins = session.query(Numismatic).filter(Numismatic.is_sold == 0).all()
+        session.close()
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(f"Sell coin list error: {e}")
+        await query.edit_message_text(f"❌ Помилка: {e}")
+        return
+
+    if not all_coins:
+        await query.edit_message_text(
+            "💸 <b>Продаж монети</b>\n\n📭 Портфель порожній — немає монет для продажу.",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("🔙 Назад", callback_data="num_add_cancel")
+            ]]),
+            parse_mode="HTML",
+        )
+        return
+
+    keyboard = []
+    for coin in all_coins:
+        lbl = f"🪙 {coin.name} ({coin.mint_year or '—'}) • {coin.quantity}шт. • {coin.cost_per_unit or 0:,.0f}₴/шт."
+        keyboard.append([InlineKeyboardButton(lbl, callback_data=f"num_sell_select_{coin.id}")])
+    keyboard.append([InlineKeyboardButton("❌ Скасувати", callback_data="num_add_cancel")])
+
+    await query.edit_message_text(
+        "💸 <b>Продаж монети</b>\n\nОберіть монету з портфелю:",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode="HTML",
+    )
+
+
+async def handle_num_sell_coin_selected(update: Update, context: CallbackContext):
+    """Монету обрано — запитуємо ціну продажу."""
+    query   = update.callback_query
+    await query.answer()
+    coin_id = int(query.data.replace("num_sell_select_", ""))
+
+    Session = context.bot_data.get('Session')
+    if not Session:
+        await query.edit_message_text("❌ Помилка підключення до бази даних")
+        return
+
+    try:
+        from models import Numismatic
+        session = Session()
+        coin    = session.query(Numismatic).filter(Numismatic.id == coin_id).first()
+        session.close()
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(f"Sell coin select error: {e}")
+        await query.edit_message_text(f"❌ Помилка: {e}")
+        return
+
+    if not coin:
+        await query.edit_message_text("❌ Монету не знайдено.")
+        return
+
+    # Зберігаємо дані монети для summary
+    context.user_data["sell_coin_id"]  = coin_id
+    context.user_data["name"]          = coin.name
+    context.user_data["nominal"]       = coin.nominal
+    context.user_data["quantity"]      = coin.quantity
+    context.user_data["cost_per_unit"] = coin.cost_per_unit
+    context.user_data["num_step"]      = "sell_price"
+
+    await query.edit_message_text(
+        f"🪙 <b>{coin.name}</b>  •  {coin.mint_year or '—'} р.\n"
+        f"💲 {coin.nominal or '—'}  •  {coin.metal_name or '—'}\n"
+        f"🛒 Кількість: {coin.quantity} шт.\n"
+        f"📊 Собівартість: {coin.cost_per_unit or 0:,.2f} ₴/шт.\n\n"
+        "💸 Введіть <b>ціну продажу за 1 шт.</b> у ₴:",
         reply_markup=_kb_cancel(),
         parse_mode="HTML",
     )
@@ -97,32 +242,46 @@ async def handle_num_confirm(update: Update, context: CallbackContext):
     data = context.user_data.copy()
     context.user_data.clear()
 
-    total, cost = _calc(data)
+    op = data.get("operation_type", "купівля")
 
     try:
         from models import Numismatic
         Session = context.bot_data.get('Session')
         if Session:
             session = Session()
-            coin = Numismatic(
-                name           = data.get("name"),
-                nominal        = data.get("nominal"),
-                metal_code     = data.get("metal_code"),
-                metal_name     = data.get("metal_name"),
-                metal_weight   = data.get("metal_weight"),
-                mint_year      = data.get("mint_year"),
-                mintage        = data.get("mintage"),
-                diameter       = data.get("diameter"),
-                price_per_unit = data.get("price_per_unit"),
-                quantity       = data.get("quantity"),
-                delivery_cost  = data.get("delivery_cost", 0),
-                total_amount   = total,
-                cost_per_unit  = cost,
-                sell_price     = None,
-                is_sold        = 0,
-                created_at     = datetime.now().isoformat(),
-            )
-            session.add(coin)
+
+            if op == "купівля":
+                total, cost = _calc(data)
+                coin = Numismatic(
+                    operation_type = "купівля",
+                    name           = data.get("name"),
+                    nominal        = data.get("nominal"),
+                    metal_code     = data.get("metal_code"),
+                    metal_name     = data.get("metal_name"),
+                    metal_weight   = data.get("metal_weight"),
+                    mint_year      = data.get("mint_year"),
+                    mintage        = data.get("mintage"),
+                    diameter       = data.get("diameter"),
+                    price_per_unit = data.get("price_per_unit"),
+                    quantity       = data.get("quantity"),
+                    delivery_cost  = data.get("delivery_cost", 0),
+                    total_amount   = total,
+                    cost_per_unit  = cost,
+                    sell_price     = None,
+                    is_sold        = 0,
+                    created_at     = datetime.now().isoformat(),
+                )
+                session.add(coin)
+
+            else:  # продаж
+                coin_id    = data.get("sell_coin_id")
+                sell_price = data.get("sell_price", 0)
+                coin = session.query(Numismatic).filter(Numismatic.id == coin_id).first()
+                if coin:
+                    coin.sell_price     = sell_price
+                    coin.is_sold        = 1
+                    coin.operation_type = "продаж"
+
             session.commit()
             session.close()
     except Exception as e:
@@ -130,9 +289,9 @@ async def handle_num_confirm(update: Update, context: CallbackContext):
         logging.getLogger(__name__).error(f"Coin save error: {e}")
 
     from handlers.numismatics.main_menu import get_numismatics_menu_keyboard
+    msg = "✅ <b>Купівлю збережено!</b>" if op == "купівля" else "✅ <b>Продаж збережено!</b>"
     await query.edit_message_text(
-        "✅ <b>Монету збережено!</b>\n\n"
-        "🏛 <b>Нумізматика</b> — оберіть дію:",
+        f"{msg}\n\n🏛 <b>Нумізматика</b> — оберіть дію:",
         reply_markup=get_numismatics_menu_keyboard(),
         parse_mode="HTML",
     )
@@ -145,7 +304,7 @@ async def handle_num_cancel(update: Update, context: CallbackContext):
 
     from handlers.numismatics.main_menu import get_numismatics_menu_keyboard
     await query.edit_message_text(
-        "❌ Додавання скасовано.\n\n🏛 <b>Нумізматика</b> — оберіть дію:",
+        "❌ Скасовано.\n\n🏛 <b>Нумізматика</b> — оберіть дію:",
         reply_markup=get_numismatics_menu_keyboard(),
         parse_mode="HTML",
     )
@@ -167,10 +326,8 @@ STEPS = [
     ("delivery_cost",  "delivery_cost",  None,                                                                                        None),
 ]
 
-# Поля що мають бути числами (float)
-FLOAT_FIELDS  = {"metal_weight", "diameter", "price_per_unit", "delivery_cost"}
-# Поля що мають бути цілими числами
-INT_FIELDS    = {"mint_year", "mintage", "quantity"}
+FLOAT_FIELDS = {"metal_weight", "diameter", "price_per_unit", "delivery_cost", "sell_price"}
+INT_FIELDS   = {"mint_year", "mintage", "quantity"}
 
 
 async def handle_message_numismatics(update: Update, context: CallbackContext):
@@ -179,7 +336,27 @@ async def handle_message_numismatics(update: Update, context: CallbackContext):
         return
     text = update.message.text.strip()
 
-    # Знаходимо поточний крок у STEPS
+    # ── Флоу продажу: крок введення ціни ─────────────────────────────────────
+    if step == "sell_price":
+        try:
+            sell_price = float(text.replace(",", ".").replace(" ", ""))
+            if sell_price <= 0:
+                raise ValueError
+        except ValueError:
+            await update.message.reply_text(
+                "⚠️ Введіть коректну ціну (додатнє число):", reply_markup=_kb_cancel()
+            )
+            return
+        context.user_data["sell_price"] = sell_price
+        context.user_data["num_step"]   = "confirm"
+        await update.message.reply_text(
+            _summary_sell(context.user_data),
+            reply_markup=_kb_confirm(),
+            parse_mode="HTML",
+        )
+        return
+
+    # ── Флоу купівлі ──────────────────────────────────────────────────────────
     current = next((s for s in STEPS if s[0] == step), None)
 
     if step == "name":
@@ -198,10 +375,8 @@ async def handle_message_numismatics(update: Update, context: CallbackContext):
     if current is None:
         return
 
-    # Розпаковуємо: (поточний_крок, поле_збереження, питання_наступного, наступний_крок)
     _, current_field, next_question, next_step = current
 
-    # Валідація числових полів
     if current_field in FLOAT_FIELDS:
         try:
             value = float(text.replace(",", ".").replace(" ", ""))
@@ -227,24 +402,20 @@ async def handle_message_numismatics(update: Update, context: CallbackContext):
         context.user_data[current_field] = value
 
     else:
-        # Текстові поля
         if not text:
             await update.message.reply_text("⚠️ Поле не може бути порожнім:", reply_markup=_kb_cancel())
             return
         context.user_data[current_field] = text
 
-    # Останній крок — показуємо підтвердження
     if next_step is None:
-        total, cost = _calc(context.user_data)
         context.user_data["num_step"] = "confirm"
         await update.message.reply_text(
-            _summary(context.user_data),
+            _summary_buy(context.user_data),
             reply_markup=_kb_confirm(),
             parse_mode="HTML",
         )
         return
 
-    # Переходимо до наступного кроку
     context.user_data["num_step"] = next_step
     await update.message.reply_text(
         next_question,
