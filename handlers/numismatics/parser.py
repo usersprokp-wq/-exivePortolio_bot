@@ -1,120 +1,252 @@
 """
-handlers/numismatics/parser.py — v2 з POST запитом
+handlers/numismatics/parser.py — v3
+Асинхронний парсер ua-coins.info з run_in_executor.
 """
 import logging
+import re
+import asyncio
+from functools import partial
+
 import requests
 from bs4 import BeautifulSoup
 
 logger = logging.getLogger(__name__)
 
 HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-                  "Chrome/120.0.0.0 Safari/537.36",
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/120.0.0.0 Safari/537.36"
+    ),
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
     "Accept-Language": "uk,en;q=0.9",
-    "Referer": "https://www.ua-coins.info/ua",
+    "Accept-Encoding": "gzip, deflate, br",
+    "Referer": "https://www.ua-coins.info/ua/",
 }
-BASE_URL = "https://www.ua-coins.info/ua"
+
+SEARCH_URL = "https://www.ua-coins.info/ua/catalog/"
+BASE_URL   = "https://www.ua-coins.info"
 
 
-def fetch_coin_price(name: str, nominal: str | None, date_issued: str | None) -> dict:
-    result = {"price": None, "url": None, "error": None}
+# ──────────────────────────────────────────────
+# Утиліти
+# ──────────────────────────────────────────────
+
+def _parse_price(raw: str) -> float | None:
+    """
+    Конвертує рядок ціни у float.
+    Підтримує формати:
+      "12 500 грн", "12\xa0500\xa0грн", "1,500.00", "1500.50", "12500"
+    """
+    if not raw:
+        return None
+
+    # Прибираємо пробіли, \xa0, валютні позначки і стрілки
+    cleaned = raw.replace("\xa0", "").replace(" ", "").replace("↑", "").replace("↓", "")
+    cleaned = re.sub(r"[^\d.,]", "", cleaned)
+
+    if not cleaned:
+        return None
+
+    # Формат "12.500,00" (крапка — роздільник тисяч, кома — дробова)
+    if re.match(r"^\d{1,3}(\.\d{3})+(,\d+)?$", cleaned):
+        cleaned = cleaned.replace(".", "").replace(",", ".")
+
+    # Формат "12,500.00" (кома — роздільник тисяч, крапка — дробова)
+    elif re.match(r"^\d{1,3}(,\d{3})+(\.\d+)?$", cleaned):
+        cleaned = cleaned.replace(",", "")
+
+    # Інакше просто замінюємо кому на крапку
+    else:
+        cleaned = cleaned.replace(",", ".")
+
+    try:
+        return float(cleaned)
+    except ValueError:
+        return None
+
+
+def _normalize_name(name: str) -> str:
+    """Прибирає зайві пробіли і приводить до нижнього регістру для порівняння."""
+    return re.sub(r"\s+", " ", name.strip()).lower()
+
+
+# ──────────────────────────────────────────────
+# Синхронний парсер (запускається в executor)
+# ──────────────────────────────────────────────
+
+def _fetch_coin_price_sync(name: str, nominal: str | None, date_issued: str | None) -> dict:
+    result = {"price": None, "price_num": None, "url": None, "error": None}
 
     if not name:
         result["error"] = "Назва монети відсутня"
         return result
 
+    session = requests.Session()
+    session.headers.update(HEADERS)
+
+    # ── 1. Пошуковий запит ──────────────────────────────────────────
+    params = {"search": name}
     try:
-        session = requests.Session()
-        # Отримуємо головну сторінку — cookies + можливий CSRF токен
-        main_resp = session.get(BASE_URL, headers=HEADERS, timeout=15)
-        
-        # Шукаємо форму пошуку — дізнаємось метод і action
-        soup_main = BeautifulSoup(main_resp.text, "html.parser")
-        form = soup_main.find("form")
-        
-        if form:
-            method = form.get("method", "get").lower()
-            action = form.get("action", BASE_URL)
-            if not action.startswith("http"):
-                action = f"https://www.ua-coins.info{action}"
-            logger.warning(f"Form: method={method}, action={action}")
-        else:
-            method = "get"
-            action = BASE_URL
-            logger.warning("Form не знайдено — використовуємо GET")
-
-        # Виконуємо пошук потрібним методом
-        search_data = {"search": name}
-        if method == "post":
-            resp = session.post(action, data=search_data, headers=HEADERS, timeout=15)
-        else:
-            resp = session.get(action, params=search_data, headers=HEADERS, timeout=15)
-
+        resp = session.get(SEARCH_URL, params=params, timeout=20)
         resp.raise_for_status()
-
     except requests.RequestException as e:
-        logger.error(f"Parser request error: {e}")
+        logger.error(f"Parser: помилка запиту: {e}")
         result["error"] = f"Помилка запиту: {e}"
         return result
 
-    soup = BeautifulSoup(resp.text, "html.parser")
-    rows = soup.select("table tbody tr")
+    logger.debug(f"Parser: URL={resp.url}, status={resp.status_code}")
 
-    logger.warning(f"Parser: rows={len(rows)}, url={resp.url}")
-    # Логуємо структуру першого рядка якщо є
-    if rows:
-        first = rows[0]
-        for td in first.find_all("td"):
-            logger.warning(f"  TD data-title={td.get('data-title')!r} text={td.get_text(strip=True)[:50]!r}")
-        for a in first.find_all("a"):
-            logger.warning(f"  A class={a.get('class')} text={a.get_text(strip=True)[:30]!r}")
-    else:
-        # Шукаємо будь-які таблиці
-        all_tables = soup.find_all("table")
-        logger.warning(f"Всього таблиць на сторінці: {len(all_tables)}")
-        # Шукаємо input search щоб зрозуміти чи є форма
-        inputs = soup.find_all("input")
-        for inp in inputs:
-            logger.warning(f"  INPUT name={inp.get('name')!r} type={inp.get('type')!r} value={inp.get('value','')[:30]!r}")
+    soup = BeautifulSoup(resp.text, "html.parser")
+
+    # ── 2. Знаходимо рядки таблиці ──────────────────────────────────
+    # Пробуємо кілька селекторів — сайт може мати різну структуру
+    rows = (
+        soup.select("table.catalog-list tbody tr")
+        or soup.select("table tbody tr")
+        or soup.select(".catalog-table tr")
+        or soup.select("tr[class*='coin']")
+    )
+
+    logger.debug(f"Parser: знайдено рядків={len(rows)}")
 
     if not rows:
-        result["error"] = "Результатів не знайдено"
+        # Діагностика — що взагалі є на сторінці
+        all_tables = soup.find_all("table")
+        logger.warning(f"Parser: таблиць на сторінці={len(all_tables)}, пробуємо альт. пошук")
+
+        # Fallback: шукаємо будь-який елемент з ціною
+        result = _fallback_search(soup, resp.url)
+        if not result["price"] and not result["error"]:
+            result["error"] = "Результатів не знайдено. Можливо, змінилась структура сайту."
         return result
 
+    # ── 3. Перебираємо рядки ────────────────────────────────────────
+    norm_name = _normalize_name(name)
+
     for row in rows:
-        for cell in row.find_all("td"):
-            if cell.get("data-title") == "Дата":
-                date_value = cell.get_text(strip=True)
-                logger.info(f"Parser: дата={date_value!r}, шукаємо={date_issued!r}")
+        cells = {
+            (td.get("data-title") or "").strip(): td
+            for td in row.find_all("td")
+        }
+        tds = row.find_all("td")
 
-                date_match = True
-                if date_issued:
-                    date_match = (date_issued in date_value or date_value == date_issued)
+        # Отримуємо дату з рядка
+        date_cell = (
+            cells.get("Дата")
+            or cells.get("Рік")
+            or cells.get("Рік випуску")
+            or (tds[1] if len(tds) > 1 else None)
+        )
+        row_date = date_cell.get_text(strip=True) if date_cell else ""
 
-                if date_match:
-                    price_elements = row.select("a.list_price")
-                    if price_elements:
-                        price_text = price_elements[0].get_text(strip=True)
-                        result["price"] = price_text.replace("↑", "").replace("↓", "").strip()
+        # Перевіряємо відповідність дати
+        if date_issued:
+            if date_issued not in row_date and row_date != date_issued:
+                continue
 
-                    link = row.select_one("a[href]")
-                    if link:
-                        href = link.get("href", "")
-                        result["url"] = f"https://www.ua-coins.info{href}" if href.startswith("/") else href
+        # Ціна
+        price_el = (
+            row.select_one("a.list_price")
+            or row.select_one(".price")
+            or row.select_one("[class*='price']")
+            or row.select_one("td.price")
+        )
 
-                    if result["price"]:
-                        return result
+        price_text = None
+        if price_el:
+            price_text = price_el.get_text(strip=True).replace("↑", "").replace("↓", "").strip()
 
-    # Fallback
-    first_price = soup.select_one("a.list_price")
+        # Якщо ціни нема явно — шукаємо в усіх td
+        if not price_text:
+            for td in tds:
+                text = td.get_text(strip=True)
+                if re.search(r"\d[\d\s\xa0]*грн", text, re.IGNORECASE):
+                    price_text = text
+                    break
+
+        # Посилання
+        link = row.select_one("a[href]")
+        url  = None
+        if link:
+            href = link.get("href", "")
+            url  = f"{BASE_URL}{href}" if href.startswith("/") else href
+
+        if price_text:
+            price_num = _parse_price(price_text)
+            result["price"]     = price_text
+            result["price_num"] = price_num
+            result["url"]       = url
+            logger.info(f"Parser: знайдено → name={name!r}, date={row_date!r}, price={price_text!r}")
+            return result
+
+    # ── 4. Fallback — перший результат ─────────────────────────────
+    first_price = soup.select_one("a.list_price, .price, [class*='price']")
     if first_price:
-        result["price"] = first_price.get_text(strip=True).replace("↑", "").replace("↓", "").strip()
-        result["error"] = "⚠️ Точний збіг по даті не знайдено, показано перший результат"
-        first_link = soup.select_one("table tbody tr a[href]")
+        price_text  = first_price.get_text(strip=True).replace("↑", "").replace("↓", "").strip()
+        price_num   = _parse_price(price_text)
+        first_link  = soup.select_one("table tbody tr a[href], tr a[href]")
+        url = None
         if first_link:
             href = first_link.get("href", "")
-            result["url"] = f"https://www.ua-coins.info{href}" if href.startswith("/") else href
+            url  = f"{BASE_URL}{href}" if href.startswith("/") else href
+
+        result["price"]     = price_text
+        result["price_num"] = price_num
+        result["url"]       = url
+        result["error"]     = "⚠️ Точний збіг по даті не знайдено — показано перший результат"
         return result
 
     result["error"] = "Результатів не знайдено"
     return result
+
+
+def _fallback_search(soup: BeautifulSoup, page_url: str) -> dict:
+    """Альтернативний пошук якщо основний не спрацював."""
+    result = {"price": None, "price_num": None, "url": None, "error": None}
+
+    # Пробуємо знайти будь-який блок з ціною
+    price_patterns = [
+        "a.list_price", ".coin-price", ".item-price",
+        "[class*='price']", "span.price", ".catalog-price",
+    ]
+    for pat in price_patterns:
+        el = soup.select_one(pat)
+        if el:
+            text = el.get_text(strip=True)
+            if re.search(r"\d", text):
+                result["price"]     = text
+                result["price_num"] = _parse_price(text)
+                result["error"]     = "⚠️ Знайдено через fallback-пошук"
+                return result
+
+    return result
+
+
+# ──────────────────────────────────────────────
+# Публічний асинхронний інтерфейс
+# ──────────────────────────────────────────────
+
+async def fetch_coin_price(
+    name: str,
+    nominal: str | None = None,
+    date_issued: str | None = None,
+    loop=None,
+) -> dict:
+    """
+    Асинхронна обгортка — запускає синхронний парсер у ThreadPoolExecutor
+    щоб не блокувати event loop бота.
+
+    Повертає dict:
+      {
+        "price":     str | None,   # текстова ціна "12 500 грн"
+        "price_num": float | None, # числова ціна 12500.0
+        "url":       str | None,   # посилання на сторінку монети
+        "error":     str | None,   # повідомлення про помилку
+      }
+    """
+    if loop is None:
+        loop = asyncio.get_event_loop()
+
+    fn = partial(_fetch_coin_price_sync, name, nominal, date_issued)
+    return await loop.run_in_executor(None, fn)
