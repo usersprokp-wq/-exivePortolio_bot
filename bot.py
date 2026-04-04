@@ -73,6 +73,7 @@ from handlers.numismatics import (
     handle_message_num_pnl,
     show_num_profit,
     handle_num_sell_selected,
+    handle_num_write_off,
     handle_message_num_profit,
     show_num_stats,
 )
@@ -242,17 +243,17 @@ def register_deposit_handlers(application: Application):
 def register_numismatics_handlers(application: Application):
     logger.info("Реєструємо обробники Нумізматики...")
 
-    application.add_handler(CallbackQueryHandler(show_numismatics_menu,       pattern='^numismatics$'))
+    application.add_handler(CallbackQueryHandler(show_numismatics_menu,        pattern='^numismatics$'))
 
     # Додати запис — тип операції
-    application.add_handler(CallbackQueryHandler(start_numismatics_add,       pattern='^num_add$'))
-    application.add_handler(CallbackQueryHandler(handle_num_op_buy,            pattern='^num_op_buy$'))
-    application.add_handler(CallbackQueryHandler(handle_num_op_sell,           pattern='^num_op_sell$'))
+    application.add_handler(CallbackQueryHandler(start_numismatics_add,        pattern='^num_add$'))
+    application.add_handler(CallbackQueryHandler(handle_num_op_buy,             pattern='^num_op_buy$'))
+    application.add_handler(CallbackQueryHandler(handle_num_op_sell,            pattern='^num_op_sell$'))
     application.add_handler(CallbackQueryHandler(handle_num_sell_coin_selected, pattern='^num_sell_select_'))
 
     # Підтвердження / скасування
-    application.add_handler(CallbackQueryHandler(handle_num_confirm,           pattern='^num_add_confirm$'))
-    application.add_handler(CallbackQueryHandler(handle_num_cancel,            pattern='^num_add_cancel$'))
+    application.add_handler(CallbackQueryHandler(handle_num_confirm,            pattern='^num_add_confirm$'))
+    application.add_handler(CallbackQueryHandler(handle_num_cancel,             pattern='^num_add_cancel$'))
 
     # Мої записи
     application.add_handler(CallbackQueryHandler(
@@ -273,8 +274,8 @@ def register_numismatics_handlers(application: Application):
     ))
 
     # P&L портфелю
-    application.add_handler(CallbackQueryHandler(show_num_pnl,                 pattern='^num_pnl$'))
-    application.add_handler(CallbackQueryHandler(handle_num_pnl_coin_selected, pattern='^num_pnl_coin_'))
+    application.add_handler(CallbackQueryHandler(show_num_pnl,                  pattern='^num_pnl$'))
+    application.add_handler(CallbackQueryHandler(handle_num_pnl_coin_selected,  pattern='^num_pnl_coin_'))
 
     # Продані монети
     application.add_handler(CallbackQueryHandler(
@@ -286,11 +287,12 @@ def register_numismatics_handlers(application: Application):
     ))
 
     # Прибуток
-    application.add_handler(CallbackQueryHandler(show_num_profit,              pattern='^num_profit$'))
-    application.add_handler(CallbackQueryHandler(handle_num_sell_selected,     pattern='^num_sell_\d'))
+    application.add_handler(CallbackQueryHandler(show_num_profit,               pattern='^num_profit$'))
+    application.add_handler(CallbackQueryHandler(handle_num_sell_selected,      pattern='^num_sell_\d'))
+    application.add_handler(CallbackQueryHandler(handle_num_write_off,          pattern='^num_write_off_profit$'))  # ← НОВЕ
 
     # Статистика
-    application.add_handler(CallbackQueryHandler(show_num_stats,               pattern='^num_stats$'))
+    application.add_handler(CallbackQueryHandler(show_num_stats,                pattern='^num_stats$'))
 
     logger.info("✅ Обробники Нумізматики зареєстровано!")
 
@@ -300,9 +302,11 @@ def register_numismatics_handlers(application: Application):
 # ═══════════════════════════════════════════════════════════
 
 async def handle_message_unified(update: Update, context: CallbackContext):
+    step = context.user_data.get('num_profit_step')
+
     if context.user_data.get('num_pnl_step') == 'market_price':
         await handle_message_num_pnl(update, context)
-    elif context.user_data.get('num_profit_step') == 'sell_price':
+    elif step in ('sell_price', 'write_off'):          # ← додано 'write_off'
         await handle_message_num_profit(update, context)
     elif 'num_step' in context.user_data:
         await handle_message_numismatics(update, context)

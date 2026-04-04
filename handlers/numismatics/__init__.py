@@ -19,6 +19,7 @@ from handlers.numismatics.portfolio import (
 from handlers.numismatics.profit import (
     show_num_profit,
     handle_num_sell_selected,
+    handle_num_write_off,
     handle_message_num_profit,
 )
 from handlers.numismatics.stats import show_num_stats
@@ -40,6 +41,7 @@ __all__ = [
     "handle_message_num_pnl",
     "show_num_profit",
     "handle_num_sell_selected",
+    "handle_num_write_off",
     "handle_message_num_profit",
     "show_num_stats",
 ]
