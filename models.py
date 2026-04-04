@@ -169,4 +169,14 @@ class Numismatic(Base):
     cost_per_unit    = Column(Float)         # Собівартість 1 шт. (total / кількість)
     sell_price       = Column(Float)         # Ціна продажу за 1 шт.
     is_sold          = Column(Integer, default=0)  # 0 = активна, 1 = продана
+    sell_date        = Column(String(50))    # Дата продажу DD.MM.YYYY
     created_at       = Column(String(50), default=datetime.now().isoformat())
+
+
+class NumismaticProfitRecord(Base):
+    """Таблиця для відслідкування списань прибутків нумізматики"""
+    __tablename__ = 'numismatic_profit_records'
+    id             = Column(Integer, primary_key=True)
+    operation_date = Column(String(50))   # Дата списання DD.MM.YYYY
+    amount         = Column(Float)        # Сума списання, ₴
+    created_at     = Column(String(50), default=datetime.now().isoformat())
