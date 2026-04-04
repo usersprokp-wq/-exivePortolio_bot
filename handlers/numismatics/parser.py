@@ -43,6 +43,14 @@ def fetch_coin_price(name: str, nominal: str | None, date_issued: str | None) ->
     soup = BeautifulSoup(resp.text, "html.parser")
     rows = soup.select("table tbody tr")
 
+    # ДІАГНОСТИКА — видали після налагодження
+    logger.warning(f"=== PARSER DEBUG ===")
+    logger.warning(f"URL: {resp.url}")
+    logger.warning(f"Status: {resp.status_code}")
+    logger.warning(f"Rows знайдено: {len(rows)}")
+    logger.warning(f"HTML (перші 3000):\n{resp.text[:3000]}")
+    logger.warning(f"===================")
+
     if not rows:
         result["error"] = "Результатів не знайдено"
         return result
