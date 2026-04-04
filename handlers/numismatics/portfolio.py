@@ -1,6 +1,6 @@
 """
 handlers/numismatics/portfolio.py
-Портфель — активні монети (is_sold = 0).
+Портфель — активні монети (is_sold = 0) + кнопка P&L.
 """
 import logging
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
@@ -30,9 +30,8 @@ def _build_text(coins: list, page: int, total_pages: int) -> str:
     for coin in slice_:
         lines.append(_coin_block(coin))
 
-    # Зведення
-    total_invested  = sum((c.total_amount or 0) for c in coins)
-    total_qty       = sum((c.quantity or 0) for c in coins)
+    total_invested = sum((c.total_amount or 0) for c in coins)
+    total_qty      = sum((c.quantity or 0) for c in coins)
 
     lines.append("─" * 24)
     lines.append(
@@ -55,8 +54,9 @@ def _kb(page: int, total_pages: int) -> InlineKeyboardMarkup:
     keyboard = []
     if nav:
         keyboard.append(nav)
-    keyboard.append([InlineKeyboardButton("✅ Продані монети", callback_data="num_sold")])
-    keyboard.append([InlineKeyboardButton("🔙 Назад",         callback_data="numismatics")])
+    keyboard.append([InlineKeyboardButton("📊 Дізнатись P&L",  callback_data="num_pnl")])
+    keyboard.append([InlineKeyboardButton("✅ Продані монети",  callback_data="num_sold")])
+    keyboard.append([InlineKeyboardButton("🔙 Назад",           callback_data="numismatics")])
     return InlineKeyboardMarkup(keyboard)
 
 
@@ -96,6 +96,154 @@ async def show_num_portfolio(update: Update, context: CallbackContext, page: int
     await query.edit_message_text(
         _build_text(active, page, total_pages),
         reply_markup=_kb(page, total_pages),
+        parse_mode="HTML",
+    )
+
+
+async def show_num_pnl(update: Update, context: CallbackContext):
+    """Показує список монет для вибору — потім вводимо ринкову ціну."""
+    query = update.callback_query
+    await query.answer()
+
+    Session = context.bot_data.get('Session')
+    if not Session:
+        await query.edit_message_text("❌ Помилка підключення до бази даних")
+        return
+
+    try:
+        session   = Session()
+        all_coins = session.query(Numismatic).all()
+        session.close()
+        active = [c for c in all_coins if not c.is_sold]
+    except Exception as e:
+        logger.error(f"PnL error: {e}")
+        await query.edit_message_text(f"❌ Помилка: {e}")
+        return
+
+    if not active:
+        await query.edit_message_text(
+            "📊 <b>P&L портфелю</b>\n\n📭 Активних монет немає.",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("🔙 Назад", callback_data="num_portfolio")
+            ]]),
+            parse_mode="HTML",
+        )
+        return
+
+    keyboard = []
+    for coin in active:
+        lbl = f"🪙 {coin.name} ({coin.mint_year or '—'}) • {coin.quantity}шт. • собів. {coin.cost_per_unit or 0:,.0f}₴"
+        keyboard.append([InlineKeyboardButton(lbl, callback_data=f"num_pnl_coin_{coin.id}")])
+    keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data="num_portfolio")])
+
+    await query.edit_message_text(
+        "📊 <b>P&L — оберіть монету</b>\n\nВведіть ринкову ціну для розрахунку потенційного прибутку:",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode="HTML",
+    )
+
+
+async def handle_num_pnl_coin_selected(update: Update, context: CallbackContext):
+    """Монету обрано — запитуємо ринкову ціну."""
+    query   = update.callback_query
+    await query.answer()
+    coin_id = int(query.data.replace("num_pnl_coin_", ""))
+
+    Session = context.bot_data.get('Session')
+    if not Session:
+        await query.edit_message_text("❌ Помилка підключення до бази даних")
+        return
+
+    try:
+        session = Session()
+        coin    = session.query(Numismatic).filter(Numismatic.id == coin_id).first()
+        session.close()
+    except Exception as e:
+        logger.error(f"PnL coin select error: {e}")
+        await query.edit_message_text(f"❌ Помилка: {e}")
+        return
+
+    if not coin:
+        await query.edit_message_text("❌ Монету не знайдено.")
+        return
+
+    context.user_data["num_pnl_coin_id"] = coin_id
+    context.user_data["num_pnl_step"]    = "market_price"
+
+    await query.edit_message_text(
+        f"🪙 <b>{coin.name}</b>  •  {coin.mint_year or '—'} р.\n"
+        f"💲 {coin.nominal or '—'}  •  {coin.metal_name or '—'}\n"
+        f"🛒 Кількість: {coin.quantity} шт.\n"
+        f"📊 Собівартість: {coin.cost_per_unit or 0:,.2f} ₴/шт.\n\n"
+        "💹 Введіть <b>поточну ринкову ціну</b> за 1 шт. у ₴:",
+        reply_markup=InlineKeyboardMarkup([[
+            InlineKeyboardButton("🔙 Назад", callback_data="num_pnl")
+        ]]),
+        parse_mode="HTML",
+    )
+
+
+async def handle_message_num_pnl(update: Update, context: CallbackContext):
+    """Отримуємо ринкову ціну і показуємо P&L."""
+    if context.user_data.get("num_pnl_step") != "market_price":
+        return
+    if not update.message or not update.message.text:
+        return
+
+    text = update.message.text.strip()
+    try:
+        market_price = float(text.replace(",", ".").replace(" ", ""))
+        if market_price <= 0:
+            raise ValueError
+    except ValueError:
+        await update.message.reply_text(
+            "⚠️ Введіть коректну ціну (додатнє число):",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("🔙 Назад", callback_data="num_pnl")
+            ]]),
+        )
+        return
+
+    coin_id = context.user_data.get("num_pnl_coin_id")
+    context.user_data.pop("num_pnl_step", None)
+    context.user_data.pop("num_pnl_coin_id", None)
+
+    Session = context.bot_data.get('Session')
+    if not Session:
+        await update.message.reply_text("❌ Помилка підключення до бази даних")
+        return
+
+    try:
+        session = Session()
+        coin    = session.query(Numismatic).filter(Numismatic.id == coin_id).first()
+        session.close()
+    except Exception as e:
+        logger.error(f"PnL calc error: {e}")
+        await update.message.reply_text(f"❌ Помилка: {e}")
+        return
+
+    if not coin:
+        await update.message.reply_text("❌ Монету не знайдено.")
+        return
+
+    cost      = coin.cost_per_unit or 0
+    qty       = coin.quantity or 1
+    pnl       = (market_price - cost) * qty
+    pnl_pct   = ((market_price - cost) / cost * 100) if cost else 0
+    sign      = "+" if pnl >= 0 else ""
+
+    from handlers.numismatics.main_menu import get_numismatics_menu_keyboard
+    await update.message.reply_text(
+        f"📊 <b>P&L — {coin.name}</b>\n\n"
+        f"🛒 Кількість: {qty} шт.\n"
+        f"📊 Собівартість: {cost:,.2f} ₴/шт.\n"
+        f"💹 Ринкова ціна: {market_price:,.2f} ₴/шт.\n"
+        f"─────────────────\n"
+        f"💰 P&L: <b>{sign}{pnl:,.2f} ₴</b>  ({sign}{pnl_pct:.1f}%)\n",
+        reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton("📊 Перерахувати", callback_data="num_pnl")],
+            [InlineKeyboardButton("🔙 До портфелю",  callback_data="num_portfolio")],
+        ]),
         parse_mode="HTML",
     )
 
