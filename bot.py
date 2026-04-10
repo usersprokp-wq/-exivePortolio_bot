@@ -22,6 +22,7 @@ from handlers.ovdp import (
     handle_message_ovdp,
     save_bond,
     show_bonds_list,
+    handle_bond_delete,
     show_portfolio,
     update_balance_platform_selection,
     handle_balance_platform_selection,
@@ -182,6 +183,9 @@ def register_ovdp_handlers(application: Application):
     application.add_handler(CallbackQueryHandler(show_statistics,    pattern='^ovdp_stats$'))
     application.add_handler(CallbackQueryHandler(
         sync_bonds_from_sheets, pattern='^(sync_ovdp_sheets_to_db|sync_sheets_to_db)$'
+    ))
+    application.add_handler(CallbackQueryHandler(
+        handle_bond_delete, pattern='^bond_delete_'
     ))
 
     logger.info("✅ Обробники ОВДП зареєстровано!")

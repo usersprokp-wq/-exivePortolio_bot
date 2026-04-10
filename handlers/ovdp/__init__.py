@@ -14,14 +14,14 @@ from .add_operations import (
     show_bond_calendar,
     handle_bond_calendar_navigation,
     show_sell_bond_selection,
-    handle_sell_bond_selected,    # 👈 ЦЕ ВАЖЛИВО!
+    handle_sell_bond_selected,
     handle_message_ovdp,
     save_bond_sell,
     save_bond,
 )
 
 # Список операцій
-from .list_operations import show_bonds_list
+from .list_operations import show_bonds_list, handle_bond_delete
 
 # Портфель
 from .portfolio import (
@@ -50,14 +50,11 @@ async def handle_balance_platform_selection(update: Update, context: CallbackCon
     query = update.callback_query
     await query.answer()
 
-    # Отримуємо платформу з callback_data: 'ovdp_balance_platform_icu' -> 'ICU'
     platform = query.data.replace('ovdp_balance_platform_', '').upper()
 
-    # Зберігаємо платформу і встановлюємо крок для handle_message_ovdp
     context.user_data['ovdp_balance_platform'] = platform
     context.user_data['bond_step'] = 'ovdp_balance_amount'
 
-    # Отримуємо поточний залишок з БД
     Session = context.bot_data.get('Session')
     current_amount = 0
     if Session:
@@ -96,6 +93,7 @@ __all__ = [
 
     # Список
     'show_bonds_list',
+    'handle_bond_delete',
 
     # Портфель
     'show_portfolio',
