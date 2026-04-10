@@ -452,7 +452,7 @@ async def handle_message_ovdp(update: Update, context: CallbackContext):
                     return
                 
                 platform = context.user_data['ovdp_balance_platform']
-                ticker = f"{platform}uah"
+                ticker = f"{platform.lower()}uah"
                 
                 session = Session()
                 record = session.query(BondPortfolio).filter(BondPortfolio.bond_number == ticker).first()
