@@ -10,6 +10,12 @@ from models import Bond, BondPortfolio, ProfitRecord
 
 logger = logging.getLogger(__name__)
 
+MONTHS_UA = {
+    1: 'Січень', 2: 'Лютий', 3: 'Березень', 4: 'Квітень',
+    5: 'Травень', 6: 'Червень', 7: 'Липень', 8: 'Серпень',
+    9: 'Вересень', 10: 'Жовтень', 11: 'Листопад', 12: 'Грудень'
+}
+
 
 async def start_bond_add(update: Update, context: CallbackContext):
     """Розпочати додавання ОВДП"""
@@ -78,7 +84,7 @@ async def show_bond_calendar(update: Update, context: CallbackContext):
     
     keyboard = []
     
-    month_name = first_day.strftime('%B %Y')
+    month_name = f"{MONTHS_UA[month]} ({month:02d})"
     nav_keyboard = [
         InlineKeyboardButton("◀️", callback_data=f'cal_prev_{year}_{month}'),
         InlineKeyboardButton(month_name, callback_data='cal_month'),
