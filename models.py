@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, Column, Integer, String, Float
+from sqlalchemy import create_engine, Column, Integer, String, Float, Numeric
 from sqlalchemy.ext.declarative import declarative_base
 from datetime import datetime
 
@@ -39,8 +39,8 @@ class BondPortfolio(Base):
     bond_number = Column(String(50))
     maturity_date = Column(String(50))
     total_quantity = Column(Integer)
-    total_amount = Column(Float)
-    avg_price = Column(Float)
+    total_amount = Column(Numeric(precision=20, scale=10))
+    avg_price = Column(Numeric(precision=20, scale=10))
     platform = Column(String(100))
     percent = Column(Float, default=0)
     last_update = Column(String(50), default=datetime.now().isoformat())
