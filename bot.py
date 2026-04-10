@@ -141,6 +141,30 @@ async def handle_platform_buy(update: Update, context: CallbackContext, platform
     await save_bond(update, context)
 
 
+async def handle_maturity_selected(update: Update, context: CallbackContext):
+    """Користувач підтвердив дату погашення з існуючих записів"""
+    query = update.callback_query
+    await query.answer()
+    maturity_date = query.data.replace('maturity_use_', '')
+    context.user_data['maturity_date'] = maturity_date
+    context.user_data['bond_step'] = 'price_per_unit'
+    await query.edit_message_text(
+        f"📆 Термін погашення: {maturity_date}\n\n💰 Введіть ціну за одну облігацію:",
+        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data='ovdp_add')]]),
+    )
+
+
+async def handle_maturity_manual(update: Update, context: CallbackContext):
+    """Користувач хоче ввести дату погашення вручну"""
+    query = update.callback_query
+    await query.answer()
+    context.user_data['bond_step'] = 'maturity_date'
+    await query.edit_message_text(
+        "📆 Введіть термін погашення (ДД.ММ.РРРР):",
+        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data='ovdp_add')]]),
+    )
+
+
 # ═══════════════════════════════════════════════════════════
 # РЕЄСТРАЦІЯ ОБРОБНИКІВ ОВДП
 # ═══════════════════════════════════════════════════════════
@@ -186,6 +210,12 @@ def register_ovdp_handlers(application: Application):
     ))
     application.add_handler(CallbackQueryHandler(
         handle_bond_delete, pattern='^bond_delete_'
+    ))
+    application.add_handler(CallbackQueryHandler(
+        handle_maturity_selected, pattern='^maturity_use_'
+    ))
+    application.add_handler(CallbackQueryHandler(
+        handle_maturity_manual, pattern='^maturity_manual$'
     ))
 
     logger.info("✅ Обробники ОВДП зареєстровано!")

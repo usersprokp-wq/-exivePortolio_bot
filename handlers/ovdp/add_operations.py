@@ -257,11 +257,42 @@ async def handle_message_ovdp(update: Update, context: CallbackContext):
         elif step == 'bond_number':
             # Тільки для купівлі — продаж іде через кнопки
             context.user_data['bond_number'] = user_message
-            context.user_data['bond_step'] = 'maturity_date'
-            await update.message.reply_text(
-                "📆 Введіть термін погашення (ДД.ММ.РРРР):",
-                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data='ovdp_add')]]),
-            )
+
+            # Шукаємо чи є вже записи з таким номером ОВДП
+            Session = context.bot_data.get('Session')
+            existing_maturity = None
+            if Session:
+                session = Session()
+                existing = session.query(Bond).filter(
+                    Bond.bond_number == user_message
+                ).first()
+                session.close()
+                if existing and existing.maturity_date:
+                    existing_maturity = existing.maturity_date
+
+            if existing_maturity:
+                # Пропонуємо знайдену дату погашення
+                context.user_data['bond_step'] = 'maturity_date_confirm'
+                keyboard = [
+                    [InlineKeyboardButton(f"✅ {existing_maturity}", callback_data=f'maturity_use_{existing_maturity}')],
+                    [InlineKeyboardButton("✏️ Ввести іншу", callback_data='maturity_manual')],
+                    [InlineKeyboardButton("🔙 Назад", callback_data='ovdp_add')]
+                ]
+                await update.message.reply_text(
+                    f"🔢 Номер: {user_message}\n\n"
+                    f"📆 Знайдено дату погашення з попередніх записів:\n"
+                    f"*{existing_maturity}*\n\n"
+                    f"Використати цю дату?",
+                    reply_markup=InlineKeyboardMarkup(keyboard),
+                    parse_mode='Markdown'
+                )
+            else:
+                # Нова облігація — вводимо вручну
+                context.user_data['bond_step'] = 'maturity_date'
+                await update.message.reply_text(
+                    "📆 Введіть термін погашення (ДД.ММ.РРРР):",
+                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data='ovdp_add')]]),
+                )
         
         elif step == 'maturity_date':
             try:
