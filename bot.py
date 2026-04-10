@@ -1,6 +1,6 @@
 import logging
 import os
-from telegram import Update
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, CallbackContext, CallbackQueryHandler
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
