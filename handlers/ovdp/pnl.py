@@ -42,7 +42,7 @@ async def show_pnl_portfolio(update: Update, context: CallbackContext):
                     'total_amount': 0,
                 }
             grouped[bn]['total_quantity'] += record.total_quantity
-            grouped[bn]['total_amount'] += record.total_amount
+            grouped[bn]['total_amount'] += float(record.total_amount or 0)
 
         text = "📊 *PnL Портфеля (Live)*\n\n"
         total_buy_value = 0
