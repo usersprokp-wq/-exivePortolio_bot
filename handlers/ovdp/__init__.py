@@ -60,7 +60,7 @@ async def handle_balance_platform_selection(update: Update, context: CallbackCon
     if Session:
         from models import BondPortfolio
         session = Session()
-        ticker = f"{platform.lower()}uah"
+        ticker = f"{platform}uah"
         current = session.query(BondPortfolio).filter(BondPortfolio.bond_number == ticker).first()
         session.close()
         current_amount = current.total_amount if current else 0
