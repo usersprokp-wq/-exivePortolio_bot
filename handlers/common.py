@@ -314,8 +314,8 @@ async def sync_bonds_to_sheets(update: Update, context: CallbackContext):
                 'bond_number': record.bond_number,
                 'maturity_date': record.maturity_date,
                 'total_quantity': record.total_quantity,
-                'avg_price': record.avg_price,
-                'total_amount': record.total_amount,
+                'avg_price': float(record.avg_price or 0),
+                'total_amount': float(record.total_amount or 0),
                 'platform': record.platform or ''
             })
         
