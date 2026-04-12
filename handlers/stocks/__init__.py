@@ -23,10 +23,10 @@ async def show_stocks_menu(update: Update, context: CallbackContext):
     """Показати меню Акцій"""
     query = update.callback_query
     keyboard = [
-        [InlineKeyboardButton("➕ Додати запис", callback_data='stocks_add')],
-        [InlineKeyboardButton("📋 Мої записи", callback_data='stocks_list')],
-        [InlineKeyboardButton("💼 Портфель", callback_data='stocks_portfolio')],
-        [InlineKeyboardButton("💰 Прибуток", callback_data='stocks_profit')],
+        [InlineKeyboardButton("➕ Додати запис", callback_data='stocks_add'),
+         InlineKeyboardButton("📋 Мої записи", callback_data='stocks_list')],
+        [InlineKeyboardButton("💼 Портфель", callback_data='stocks_portfolio'),
+         InlineKeyboardButton("💰 Прибуток", callback_data='stocks_profit')],
         [InlineKeyboardButton("📊 Статистика", callback_data='stocks_stats')],
         [InlineKeyboardButton("🔙 Назад", callback_data='back_to_menu')]
     ]
