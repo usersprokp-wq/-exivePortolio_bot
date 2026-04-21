@@ -89,6 +89,9 @@ async def show_entry_points(update: Update, context: CallbackContext, page: int 
                 except Exception as e:
                     logger.error(f"yfinance error for {ticker_clean}: {e}")
 
+                # Пропускаємо делістовані тікери (ціна недоступна)
+                if not current_price:
+                    continue
                 results.append({
                     'ticker': ticker,
                     'avg_entry': avg_entry,
