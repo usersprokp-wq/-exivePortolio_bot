@@ -146,9 +146,16 @@ async def _fetch_pnl_data(session_factory):
         ticker_clean = record.ticker.split('.')[0]
         try:
             stock = yf.Ticker(ticker_clean)
-            info = stock.info
-            current_price = info.get('regularMarketPrice') or info.get('currentPrice')
-            if current_price is None:
+            # Пробуємо fast_info спочатку (надійніше в новому yfinance)
+            try:
+                current_price = stock.fast_info.last_price
+            except Exception:
+                current_price = None
+            # Fallback до info
+            if not current_price:
+                info = stock.info
+                current_price = info.get('regularMarketPrice') or info.get('currentPrice') or info.get('previousClose')
+            if not current_price:
                 errors.append(record.ticker)
                 continue
             invested = record.avg_price * record.total_quantity
