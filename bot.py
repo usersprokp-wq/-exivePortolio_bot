@@ -391,7 +391,7 @@ def main():
             r'^('
             r'stocks|stocks_add|stocks_list|stocks_list_page_\d+|'
             r'stocks_date_|stocks_date_step|stocks_portfolio|stocks_stats|stocks_stats_general|stocks_stats_top|stocks_dividends|'
-            r'stocks_check_pnl|stocks_profit|'
+            r'stocks_check_pnl|stocks_profit|stocks_entry_points|entry_refresh|entry_page_|'
             r'stocks_sync|stocks_sync_from_sheets|stocks_cal_|'
             r'stock_buy|stock_sell|stock_dividend|sell_stock_|stock_platform_|'
             r'update_balance|balance_platform_|dividend_|'

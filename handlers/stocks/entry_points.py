@@ -95,10 +95,10 @@ async def show_entry_points(update: Update, context: CallbackContext, page: int 
                     'current_price': current_price,
                 })
 
-            # Сортуємо: спочатку ті де поточна ціна близька до входу
+            # Сортуємо: спочатку найближчі до точки входу (найменший % від входу, негативні першими)
             def sort_key(r):
                 if r['current_price'] and r['avg_entry']:
-                    return abs(r['current_price'] - r['avg_entry']) / r['avg_entry']
+                    return (r['current_price'] - r['avg_entry']) / r['avg_entry']
                 return 999
             results.sort(key=sort_key)
 
