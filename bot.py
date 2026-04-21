@@ -11,6 +11,7 @@ from google_sheets import GoogleSheetsManager
 from handlers.common import start, button_handler_main
 
 from handlers.stocks import button_handler_stocks, handle_message_stocks, write_off_stocks_profit
+from handlers.crypto import button_handler_crypto, handle_message_crypto, write_off_crypto_profit
 
 from handlers.ovdp import (
     show_ovdp_menu,
@@ -348,6 +349,10 @@ async def handle_message_unified(update: Update, context: CallbackContext):
         await handle_message_deposit_profit(update, context)
     elif 'deposit_step' in context.user_data:
         await handle_message_deposit(update, context)
+    elif context.user_data.get('crypto_profit_step') == 'enter_amount':
+        await handle_message_crypto(update, context)
+    elif 'crypto_step' in context.user_data:
+        await handle_message_crypto(update, context)
     # ✅ ФІКС: акції перевіряємо ДО ОВДП — раніше 'profit_step' з ОВДП перехоплював введення акцій
     elif context.user_data.get('stocks_profit_step') == 'enter_amount':
         from handlers.stocks.profit import handle_message_profit
@@ -380,6 +385,25 @@ def main():
 
     # ✅ ФІКС: stocks_write_off_profit реєструємо ОКРЕМО до загального stocks handler
     # щоб викликалась правильна функція яка встановлює stocks_profit_step
+    # --- Крипта ---
+    app.add_handler(CallbackQueryHandler(
+        write_off_crypto_profit,
+        pattern=r'^crypto_write_off_profit$'
+    ))
+    app.add_handler(CallbackQueryHandler(
+        button_handler_crypto,
+        pattern=(
+            r'^('
+            r'crypto|crypto_add|crypto_list|crypto_list_page_\d+|'
+            r'crypto_date_|crypto_cal_|crypto_portfolio|crypto_portfolio_page_\d+|'
+            r'crypto_check_pnl|crypto_pnl_refresh|crypto_pnl_page_|'
+            r'crypto_profit|crypto_stats|crypto_stats_general|crypto_stats_top|'
+            r'crypto_entry_points|crypto_entry_refresh|crypto_entry_page_|'
+            r'crypto_buy|crypto_sell|sell_crypto_|crypto_platform_|crypto_date_step'
+            r').*$'
+        )
+    ))
+
     app.add_handler(CallbackQueryHandler(
         write_off_stocks_profit,
         pattern=r'^stocks_write_off_profit$'
@@ -391,7 +415,7 @@ def main():
             r'^('
             r'stocks|stocks_add|stocks_list|stocks_list_page_\d+|'
             r'stocks_date_|stocks_date_step|stocks_portfolio|stocks_stats|stocks_stats_general|stocks_stats_top|stocks_dividends|'
-            r'stocks_check_pnl|stocks_profit|stocks_entry_points|entry_refresh|entry_page_|'
+            r'stocks_check_pnl|stocks_profit|'
             r'stocks_sync|stocks_sync_from_sheets|stocks_cal_|'
             r'stock_buy|stock_sell|stock_dividend|sell_stock_|stock_platform_|'
             r'update_balance|balance_platform_|dividend_|'
@@ -411,7 +435,7 @@ def main():
             r'sync_deposit_db_to_sheets|sync_deposit_sheets_to_db|'
             r'sync_crypto_db_to_sheets|sync_crypto_sheets_to_db|'
             r'sync_numismatics_db_to_sheets|sync_numismatics_sheets_to_db|'
-            r'stocks|deposit|crypto|numismatics'
+            r'stocks|deposit|numismatics'
             r')$'
         )
     ))

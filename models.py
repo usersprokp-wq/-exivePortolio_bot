@@ -138,13 +138,40 @@ class Crypto(Base):
     """Модель для криптовалют"""
     __tablename__ = 'cryptos'
     id = Column(Integer, primary_key=True)
+    row_order = Column(Integer, default=0)
     date = Column(String(50))
     operation_type = Column(String(20))
-    coin_name = Column(String(50))
+    ticker = Column(String(50))
+    name = Column(String(200))
     quantity = Column(Float)
     price_per_unit = Column(Float)
     total_amount = Column(Float)
     platform = Column(String(100))
+    pnl = Column(Float, default=0)
+    created_at = Column(String(50), default=datetime.now().isoformat())
+
+
+class CryptoPortfolio(Base):
+    """Модель для портфеля крипти"""
+    __tablename__ = 'crypto_portfolio'
+    id = Column(Integer, primary_key=True)
+    ticker = Column(String(50), unique=True)
+    total_quantity = Column(Float)
+    total_amount = Column(Float)
+    avg_price = Column(Float)
+    platform = Column(String(100))
+    percent = Column(Float, default=0)
+    last_update = Column(String(50), default=datetime.now().isoformat())
+
+
+class CryptoProfitRecord(Base):
+    """Таблиця для відслідкування прибутків крипти"""
+    __tablename__ = 'crypto_profit_records'
+    id = Column(Integer, primary_key=True)
+    operation_date = Column(String(50))
+    operation_type = Column(String(20))
+    amount = Column(Float)
+    unrealized_profit = Column(Float, default=0)
     created_at = Column(String(50), default=datetime.now().isoformat())
 
 
