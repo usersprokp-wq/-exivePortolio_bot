@@ -10,7 +10,7 @@ from models import Base
 from google_sheets import GoogleSheetsManager
 from handlers.common import start, button_handler_main
 
-from handlers.stocks import button_handler_stocks, handle_message_stocks
+from handlers.stocks import button_handler_stocks, handle_message_stocks, write_off_stocks_profit
 
 from handlers.ovdp import (
     show_ovdp_menu,
@@ -340,7 +340,7 @@ async def handle_message_unified(update: Update, context: CallbackContext):
 
     if context.user_data.get('num_pnl_step') == 'market_price':
         await handle_message_num_pnl(update, context)
-    elif step in ('sell_price', 'write_off'):          # ← додано 'write_off'
+    elif step in ('sell_price', 'write_off'):
         await handle_message_num_profit(update, context)
     elif 'num_step' in context.user_data:
         await handle_message_numismatics(update, context)
@@ -348,10 +348,14 @@ async def handle_message_unified(update: Update, context: CallbackContext):
         await handle_message_deposit_profit(update, context)
     elif 'deposit_step' in context.user_data:
         await handle_message_deposit(update, context)
-    elif 'bond_step' in context.user_data or 'profit_step' in context.user_data:
-        await handle_message_ovdp(update, context)
+    # ✅ ФІКС: акції перевіряємо ДО ОВДП — раніше 'profit_step' з ОВДП перехоплював введення акцій
+    elif context.user_data.get('stocks_profit_step') == 'enter_amount':
+        from handlers.stocks.profit import handle_message_profit
+        await handle_message_profit(update, context)
     elif 'stock_step' in context.user_data or 'dividend_step' in context.user_data:
         await handle_message_stocks(update, context)
+    elif 'bond_step' in context.user_data or 'profit_step' in context.user_data:
+        await handle_message_ovdp(update, context)
 
 
 # ═══════════════════════════════════════════════════════════
@@ -374,13 +378,20 @@ def main():
     register_deposit_handlers(app)
     register_numismatics_handlers(app)
 
+    # ✅ ФІКС: stocks_write_off_profit реєструємо ОКРЕМО до загального stocks handler
+    # щоб викликалась правильна функція яка встановлює stocks_profit_step
+    app.add_handler(CallbackQueryHandler(
+        write_off_stocks_profit,
+        pattern=r'^stocks_write_off_profit$'
+    ))
+
     app.add_handler(CallbackQueryHandler(
         button_handler_stocks,
         pattern=(
             r'^('
             r'stocks|stocks_add|stocks_list|stocks_list_page_\d+|'
             r'stocks_date_|stocks_date_step|stocks_portfolio|stocks_stats|stocks_stats_general|stocks_stats_top|stocks_dividends|'
-            r'stocks_check_pnl|stocks_profit|stocks_write_off_profit|'
+            r'stocks_check_pnl|stocks_profit|'
             r'stocks_sync|stocks_sync_from_sheets|stocks_cal_|'
             r'stock_buy|stock_sell|stock_dividend|sell_stock_|stock_platform_|'
             r'update_balance|balance_platform_|dividend_|'

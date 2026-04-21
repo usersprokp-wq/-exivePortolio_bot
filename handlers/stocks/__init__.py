@@ -11,7 +11,7 @@ from .add import (
 )
 from .records import show_stocks_list
 from .portfolio import show_stocks_portfolio, show_stocks_pnl, handle_update_balance, handle_balance_platform, handle_message_balance
-from .profit import show_stocks_profit, handle_message_profit
+from .profit import show_stocks_profit, handle_message_profit, write_off_stocks_profit
 from .stats import show_stocks_stats
 from .dividends import show_dividends_selection, handle_dividend_ticker, confirm_dividend, handle_message_dividends
 from .sync import sync_stocks_to_sheets, sync_stocks_from_sheets
@@ -114,9 +114,7 @@ async def button_handler_stocks(update: Update, context: CallbackContext):
     # --- Прибуток ---
     elif data == 'stocks_profit':
         await show_stocks_profit(update, context)
-    elif data == 'stocks_write_off_profit':
-        context.user_data['profit_step'] = 'enter_amount'
-        await query.edit_message_text("💰 Введіть суму для списання:", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data='stocks_profit')]]), parse_mode='Markdown')
+    # stocks_write_off_profit обробляється окремим handler в bot.py через write_off_stocks_profit
 
     # --- Статистика ---
     elif data == 'stocks_stats' or data == 'stocks_stats_general':
@@ -158,17 +156,14 @@ async def button_handler_stocks(update: Update, context: CallbackContext):
 async def handle_message_stocks(update: Update, context: CallbackContext):
     """Головний роутер текстових повідомлень для розділу Акцій"""
     has_stock_step = 'stock_step' in context.user_data
-    has_profit_step = 'profit_step' in context.user_data
     has_dividend_step = 'dividend_step' in context.user_data
 
-    if not (has_stock_step or has_profit_step or has_dividend_step):
+    if not (has_stock_step or has_dividend_step):
         return
 
     try:
         if has_dividend_step:
             await handle_message_dividends(update, context)
-        elif has_profit_step:
-            await handle_message_profit(update, context)
         elif context.user_data.get('stock_step') == 'balance_amount':
             await handle_message_balance(update, context)
         else:

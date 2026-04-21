@@ -35,14 +35,12 @@ async def show_stocks_profit(update: Update, context: CallbackContext):
         total_combined = total_profit + total_dividends
 
         # --- Розбивка по місяцях ---
-        # month_data: { 'MM.YYYY': {'profit': X, 'dividends': Y} }
         month_data = defaultdict(lambda: {'profit': 0.0, 'dividends': 0.0})
 
         for s in stocks:
             if s.operation_type not in ('продаж', 'дивіденди'):
                 continue
             try:
-                # Формат дати: 03.04.2026 -> MM.YYYY
                 dt = datetime.strptime(s.date, '%d.%m.%Y')
                 month_key = dt.strftime('%m.%Y')
             except (ValueError, TypeError):
@@ -53,13 +51,12 @@ async def show_stocks_profit(update: Update, context: CallbackContext):
             elif s.operation_type == 'дивіденди':
                 month_data[month_key]['dividends'] += s.total_amount or 0
 
-        # Сортування від старого до нового
         sorted_months = sorted(
             month_data.keys(),
             key=lambda m: datetime.strptime(m, '%m.%Y')
         )
 
-        # --- Активи з портфеля (всі рядки включаючи FFusd, IBusd) ---
+        # --- Активи з портфеля ---
         portfolio_records = session.query(StockPortfolio).all()
         total_assets = sum(p.total_amount or 0 for p in portfolio_records)
 
@@ -114,8 +111,37 @@ async def show_stocks_profit(update: Update, context: CallbackContext):
         await query.edit_message_text(f"❌ Помилка: {str(e)}")
 
 
+async def write_off_stocks_profit(update: Update, context: CallbackContext):
+    """Показати форму для списання прибутку акцій"""
+    query = update.callback_query
+    await query.answer()
+
+    unrealized_profit = context.user_data.get('unrealized_profit', 0)
+
+    if unrealized_profit <= 0:
+        keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data='stocks_profit')]]
+        await query.edit_message_text(
+            "❌ *Немає прибутку для списання*",
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode='Markdown'
+        )
+        return
+
+    # ✅ КЛЮЧОВИЙ ФІКс: встановлюємо свій ключ для акцій, а не 'profit_step'
+    context.user_data['stocks_profit_step'] = 'enter_amount'
+
+    keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data='stocks_profit')]]
+    await query.edit_message_text(
+        f"✍️ *Списання прибутку акцій*\n\n"
+        f"💰 Доступно для списання: {unrealized_profit:.2f} $\n\n"
+        f"Введіть суму для списання:",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='Markdown'
+    )
+
+
 async def handle_message_profit(update: Update, context: CallbackContext):
-    """Обробка суми для списання прибутку"""
+    """Обробка суми для списання прибутку акцій"""
     user_message = update.message.text
     try:
         write_off_amount = float(user_message)
@@ -160,7 +186,8 @@ async def handle_message_profit(update: Update, context: CallbackContext):
         ]
         await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
 
-        context.user_data.pop('profit_step', None)
+        # ✅ Чистимо свій ключ
+        context.user_data.pop('stocks_profit_step', None)
         context.user_data.pop('unrealized_profit', None)
 
     except ValueError:
