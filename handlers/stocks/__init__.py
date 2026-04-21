@@ -15,6 +15,7 @@ from .profit import show_stocks_profit, handle_message_profit, write_off_stocks_
 from .stats import show_stocks_stats
 from .dividends import show_dividends_selection, handle_dividend_ticker, confirm_dividend, handle_message_dividends
 from .sync import sync_stocks_to_sheets, sync_stocks_from_sheets
+from .entry_points import show_entry_points
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +28,8 @@ async def show_stocks_menu(update: Update, context: CallbackContext):
          InlineKeyboardButton("📋 Мої записи", callback_data='stocks_list')],
         [InlineKeyboardButton("💼 Портфель", callback_data='stocks_portfolio'),
          InlineKeyboardButton("💰 Прибуток", callback_data='stocks_profit')],
-        [InlineKeyboardButton("📊 Статистика", callback_data='stocks_stats')],
+        [InlineKeyboardButton("📊 Статистика", callback_data='stocks_stats'),
+         InlineKeyboardButton("🎯 Точки входу", callback_data='stocks_entry_points')],
         [InlineKeyboardButton("🔙 Назад", callback_data='back_to_menu')]
     ]
     await query.edit_message_text(
@@ -145,6 +147,17 @@ async def button_handler_stocks(update: Update, context: CallbackContext):
     elif data.startswith('pnl_page_'):
         page = int(data.replace('pnl_page_', ''))
         await show_stocks_pnl(update, context, page=page, use_cache=True)
+
+    # --- Точки входу ---
+    elif data == 'stocks_entry_points':
+        context.user_data.pop('entry_cache', None)
+        await show_entry_points(update, context, page=1, use_cache=False)
+    elif data == 'entry_refresh':
+        context.user_data.pop('entry_cache', None)
+        await show_entry_points(update, context, page=1, use_cache=False)
+    elif data.startswith('entry_page_'):
+        page = int(data.replace('entry_page_', ''))
+        await show_entry_points(update, context, page=page, use_cache=True)
 
     # --- Синхронізація ---
     elif data == 'stocks_sync':
